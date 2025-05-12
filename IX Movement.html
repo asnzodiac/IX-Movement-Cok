@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IX Flights from COK</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h2 {
+      background: #f0f0f0;
+      padding: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 40px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #333;
+      color: white;
+    }
+    .page-break {
+      page-break-before: always;
+      margin-top: 50px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Departures - AIX - COK</h2>
+  <table id="departures-table">
+    <thead>
+      <tr>
+        <th>Flight No</th>
+        <th>Registration</th>
+        <th>To</th>
+        <th>ETD</th>
+        <th>Aircraft</th>
+        <th>Terminal</th>
+        <th>Gate</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h2>Arrivals - AIX - COK</h2>
+  <table id="arrivals-table">
+    <thead>
+      <tr>
+        <th>Flight No</th>
+        <th>Registration</th>
+        <th>From</th>
+        <th>ETA</th>
+        <th>Aircraft</th>
+        <th>Terminal</th>
+        <th>Gate</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const baseUrl = "https://api.flightradar24.com/common/v1/airport.json?code=cok";
+
+    function getEndpoint(type) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      return `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${timestamp}&page=1&limit=100&token=tBLlkORA7VvLRLkWBpJ0obhzt8J33yvwd4JF3qppW7o&pk=3a47355bf33dbc42`;
+    }
+
+    const toLocalTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString() : "-";
+
+    async function loadFlights(type) {
+      try {
+        const res = await fetch(getEndpoint(type));
+        const data = await res.json();
+        const flights = data.result.response.airport.pluginData.schedule[type].data;
+        const ixFlights = flights.filter(f => f.flight.airline.code.iata === "IX");
+
+        const tbody = document.querySelector(`#${type}-table tbody`);
+        tbody.innerHTML = "";
+
+        ixFlights.forEach(flight => {
+          const fl = flight.flight;
+          const isDeparture = type === "departures";
+
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${fl.identification.number.default || "-"}</td>
+            <td>${fl.aircraft?.registration || "-"}</td>
+            <td>${isDeparture ? fl.airport.destination?.code.iata : fl.airport.origin?.code.iata || "-"}</td>
+            <td>${toLocalTime(isDeparture ? fl.time.scheduled.departure : fl.time.estimated.arrival)}</td>
+            <td>${fl.aircraft?.model?.text || "-"}</td>
+            <td>${fl.gateInfo?.terminal || "-"}</td>
+            <td>${fl.gateInfo?.gate || "-"}</td>
+            <td>${fl.status?.text || "-"}</td>
+          `;
+          tbody.appendChild(row);
+        });
+
+      } catch (err) {
+        console.error(`Error fetching ${type}:`, err);
+      }
+    }
+
+    function refreshAllFlights() {
+      loadFlights("departures");
+      loadFlights("arrivals");
+    }
+
+    // Initial load
+    refreshAllFlights();
+
+    // Refresh every 30 seconds
+    setInterval(refreshAllFlights, 30000);
+  </script>
+
+</body>
+</html>
