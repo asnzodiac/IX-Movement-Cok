@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>IX Flights from COK</title>
+  <title> AIX COK </title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
+      position: relative;
     }
     h2 {
       background: #f0f0f0;
@@ -30,11 +31,24 @@
       page-break-before: always;
       margin-top: 50px;
     }
+    #toggle-button {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 15px;
+      background-color: #333;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
 
-  <h2>Departures - AIX - COK</h2>
+  <button id="toggle-button">Show AI Flights</button>
+
+  <h2>Departures - AIX COK </h2>
   <table id="departures-table">
     <thead>
       <tr>
@@ -42,9 +56,8 @@
         <th>Registration</th>
         <th>To</th>
         <th>ETD</th>
+        <th>STD</th>
         <th>Aircraft</th>
-        <th>Terminal</th>
-        <th>Gate</th>
         <th>Status</th>
       </tr>
     </thead>
@@ -53,7 +66,7 @@
 
   <div class="page-break"></div>
 
-  <h2>Arrivals - AIX - COK</h2>
+  <h2>Arrivals - AIX COK</h2>
   <table id="arrivals-table">
     <thead>
       <tr>
@@ -61,9 +74,8 @@
         <th>Registration</th>
         <th>From</th>
         <th>ETA</th>
+        <th>STA</th>
         <th>Aircraft</th>
-        <th>Terminal</th>
-        <th>Gate</th>
         <th>Status</th>
       </tr>
     </thead>
@@ -72,25 +84,35 @@
 
   <script>
     const baseUrl = "https://api.flightradar24.com/common/v1/airport.json?code=cok";
+    let showAIFilter = false;
 
     function getEndpoint(type) {
       const timestamp = Math.floor(Date.now() / 1000);
       return `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${timestamp}&page=1&limit=100&token=tBLlkORA7VvLRLkWBpJ0obhzt8J33yvwd4JF3qppW7o&pk=3a47355bf33dbc42`;
     }
 
-    const toLocalTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString() : "-";
+    const toLocalTime = ts =>
+      ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
 
     async function loadFlights(type) {
       try {
         const res = await fetch(getEndpoint(type));
         const data = await res.json();
         const flights = data.result.response.airport.pluginData.schedule[type].data;
-        const ixFlights = flights.filter(f => f.flight.airline.code.iata === "IX");
+
+        const filteredFlights = flights.filter(f => {
+          const number = f.flight.identification.number.default || "";
+          if (showAIFilter) {
+            return number.startsWith("IX") || number.startsWith("AI");
+          } else {
+            return number.startsWith("IX");
+          }
+        });
 
         const tbody = document.querySelector(`#${type}-table tbody`);
         tbody.innerHTML = "";
 
-        ixFlights.forEach(flight => {
+        filteredFlights.forEach(flight => {
           const fl = flight.flight;
           const isDeparture = type === "departures";
 
@@ -99,10 +121,9 @@
             <td>${fl.identification.number.default || "-"}</td>
             <td>${fl.aircraft?.registration || "-"}</td>
             <td>${isDeparture ? fl.airport.destination?.code.iata : fl.airport.origin?.code.iata || "-"}</td>
-            <td>${toLocalTime(isDeparture ? fl.time.scheduled.departure : fl.time.estimated.arrival)}</td>
+            <td>${toLocalTime(isDeparture ? fl.time.estimated.departure : fl.time.estimated.arrival)}</td>
+            <td>${toLocalTime(isDeparture ? fl.time.scheduled.departure : fl.time.scheduled.arrival)}</td>
             <td>${fl.aircraft?.model?.text || "-"}</td>
-            <td>${fl.gateInfo?.terminal || "-"}</td>
-            <td>${fl.gateInfo?.gate || "-"}</td>
             <td>${fl.status?.text || "-"}</td>
           `;
           tbody.appendChild(row);
@@ -117,6 +138,12 @@
       loadFlights("departures");
       loadFlights("arrivals");
     }
+
+    document.getElementById("toggle-button").addEventListener("click", () => {
+      showAIFilter = !showAIFilter;
+      document.getElementById("toggle-button").textContent = showAIFilter ? "Hide AI Flights" : "Show AI Flights";
+      refreshAllFlights();
+    });
 
     // Initial load
     refreshAllFlights();
