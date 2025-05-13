@@ -1,11 +1,11 @@
 {
   "name": "AIX SEC OPS - Aswin COK",
-  "short_name": "AIX SEC COK",
-  "start_url": "./",
+  "short_name": "AIX SEC OPS",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1a1a1a",
-  "description": "Live AIX flight tracker for COK security",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "icon-192.png",
