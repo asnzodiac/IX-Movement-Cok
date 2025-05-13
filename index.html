@@ -212,8 +212,10 @@
         const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
         const latestTime = est || sch;
 
-        if (latestTime && latestTime < now - 3600) return false;
-if (!latestTime || latestTime > now + 3600) return false;
+        // Keep future flights and those within the past 1 hour,
+// or delayed flights (ETA/ETD > STA/STD)
+const isDelayed = est && sch && est > sch;
+if (!latestTime || (latestTime < now - 3600 && !isDelayed)) return false;
 
         if (filterValue === "IX") {
           return fn.startsWith("IX");
