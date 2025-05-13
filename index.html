@@ -212,7 +212,7 @@
         const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
         const latestTime = est || sch;
 
-        if (latestTime < now) return false;
+        if (latestTime < now - 1800) return false;
 
         if (filterValue === "IX") {
           return fn.startsWith("IX");
