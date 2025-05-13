@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flight Status Tracker</title>
+  <style>
+    :root {
+      --bg-color: #f4f4f4;
+      --text-color: #333;
+      --header-bg: #444;
+      --table-bg: #fff;
+      --border-color: #ccc;
+    }
+
+    body.dark-mode {
+      --bg-color: #121212;
+      --text-color: #f0f0f0;
+      --header-bg: #1e1e1e;
+      --table-bg: #1b1b1b;
+      --border-color: #444;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    select, button {
+      margin: 0.5rem;
+      padding: 0.4rem 0.7rem;
+      font-size: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--table-bg);
+    }
+
+    th, td {
+      padding: 0.5rem;
+      border: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    th {
+      background-color: var(--header-bg);
+      color: #fff;
+    }
+
+    .on-time {
+      color: green;
+      font-weight: bold;
+    }
+
+    .delayed {
+      color: red;
+      font-weight: bold;
+    }
+
+    .logo {
+      height: 16px;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>Live Flight Status – COK</h2>
+    <label>Filter:
+      <select id="filter">
+        <option value="ALL">All Flights</option>
+        <option value="IX">IX Only</option>
+        <option value="IXAI">IX + AI</option>
+      </select>
+    </label>
+    <label>Order:
+      <select id="order">
+        <option value="arrival">Arrival</option>
+        <option value="departure">Departure</option>
+      </select>
+    </label>
+    <button id="toggleMode">Toggle Dark/Light</button>
+  </header>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Flight No</th>
+        <th>Registration</th>
+        <th>Origin</th>
+        <th>Destination</th>
+        <th>STA/STD</th>
+        <th>ETA/ETD</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="flights"></tbody>
+  </table>
+
+  <script>
+    let flightData = [];
+    let currentFilter = "ALL";
+    let currentOrder = "arrival";
+    const GRACE_PERIOD = 30 * 60 * 1000;
+
+    document.getElementById("filter").addEventListener("change", (e) => {
+      currentFilter = e.target.value;
+      filterAndDisplayFlights();
+    });
+
+    document.getElementById("order").addEventListener("change", (e) => {
+      currentOrder = e.target.value;
+      filterAndDisplayFlights();
+    });
+
+    document.getElementById("toggleMode").addEventListener("click", () => {
+      document.body.classList.toggle("dark-mode");
+      const isDark = document.body.classList.contains("dark-mode");
+      localStorage.setItem("theme", isDark ? "dark" : "light");
+    });
+
+    function applySavedTheme() {
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "dark") {
+        document.body.classList.add("dark-mode");
+      }
+    }
+
+    function fetchFlightData() {
+      fetch("data.json")
+        .then((res) => res.json())
+        .then((data) => {
+          flightData = data;
+          filterAndDisplayFlights();
+        });
+    }
+
+    function filterAndDisplayFlights() {
+      const now = Date.now();
+
+      const filtered = flightData.filter(f => {
+        const number = f.flight?.identification?.callsign || '';
+        const isIXOnly = currentFilter === "IX" && number.startsWith("IX");
+        const isIXAI = currentFilter === "IXAI" && (number.startsWith("IX") || number.startsWith("AI"));
+        const matchesFilter = currentFilter === "ALL" || isIXOnly || isIXAI;
+
+        const t = f.time || {};
+        const eta = t.estimated?.arrival;
+        const sta = t.scheduled?.arrival;
+        const etd = t.estimated?.departure;
+        const std = t.scheduled?.departure;
+
+        const latestTime = Math.max(eta || 0, sta || 0, etd || 0, std || 0);
+        const stillVisible = latestTime >= now - GRACE_PERIOD;
+
+        return matchesFilter && stillVisible;
+      });
+
+      const sorted = sortFlights(filtered, currentOrder);
+      displayFlights(sorted);
+    }
+
+    function sortFlights(flights, orderBy) {
+      return flights.sort((a, b) => {
+        const ta = a.time || {};
+        const tb = b.time || {};
+
+        const sa = orderBy === "arrival" ? ta.scheduled?.arrival : ta.scheduled?.departure;
+        const sb = orderBy === "arrival" ? tb.scheduled?.arrival : tb.scheduled?.departure;
+
+        const ea = orderBy === "arrival" ? ta.estimated?.arrival : ta.estimated?.departure;
+        const eb = orderBy === "arrival" ? tb.estimated?.arrival : tb.estimated?.departure;
+
+        const da = (ea || sa) - (sa || 0);
+        const db = (eb || sb) - (sb || 0);
+
+        const aDelayed = da > 5 * 60 * 1000;
+        const bDelayed = db > 5 * 60 * 1000;
+
+        if (aDelayed && !bDelayed) return -1;
+        if (!aDelayed && bDelayed) return 1;
+
+        const taTime = ea || sa || 0;
+        const tbTime = eb || sb || 0;
+        return taTime - tbTime;
+      });
+    }
+
+    function displayFlights(flights) {
+      const tbody = document.getElementById("flights");
+      tbody.innerHTML = "";
+
+      flights.forEach(f => {
+        const tr = document.createElement("tr");
+
+        const number = f.flight?.identification?.callsign || "N/A";
+        const reg = f.aircraft?.registration || "N/A";
+        const origin = f.airport?.origin?.name || "N/A";
+        const dest = f.airport?.destination?.name || "N/A";
+        const t = f.time || {};
+        const sta_std = currentOrder === "arrival" ? t.scheduled?.arrival : t.scheduled?.departure;
+        const eta_etd = currentOrder === "arrival" ? t.estimated?.arrival : t.estimated?.departure;
+
+        const delay = (eta_etd || 0) - (sta_std || 0);
+        const isDelayed = delay > 5 * 60 * 1000;
+        const statusText = isDelayed ? "Delayed" : "On Time";
+        const statusClass = isDelayed ? "delayed" : "on-time";
+
+        const logoCode = f.airline?.code?.iata || "";
+        const logoUrl = logoCode ? `https://content.airhex.com/content/logos/airlines_${logoCode}_50_50_s.png` : "";
+
+        tr.innerHTML = `
+          <td>
+            ${logoUrl ? `<img src="${logoUrl}" alt="${logoCode}" class="logo">` : ""}
+            ${number}
+          </td>
+          <td>${reg}</td>
+          <td>${origin}</td>
+          <td>${dest}</td>
+          <td>${formatTime(sta_std)}</td>
+          <td>${formatTime(eta_etd)}</td>
+          <td class="${statusClass}">${statusText}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function formatTime(unix) {
+      if (!unix) return "-";
+      const date = new Date(unix);
+      return date.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
+    }
+
+    applySavedTheme();
+    setInterval(fetchFlightData, 60000);
+    fetchFlightData();
+  </script>
+</body>
+</html>
