@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>AIX SEC OPS- Aswin COK</title>
+  <meta charset="UTF-8" />
+  <title>AIX SEC OPS - Aswin COK</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="manifest" href="manifest.json" />
   <style>
     :root {
       --bg-color: #ffffff;
@@ -45,6 +48,7 @@
       justify-content: flex-end;
       margin-bottom: 10px;
       gap: 10px;
+      flex-wrap: wrap;
     }
 
     select, button {
@@ -125,7 +129,6 @@
     </label>
   </div>
 
-  <!-- ARRIVALS FIRST -->
   <h2>Arrivals - AIX Security-COK</h2>
   <table id="arrivals-table">
     <thead>
@@ -144,7 +147,6 @@
 
   <div class="page-break"></div>
 
-  <!-- DEPARTURES NEXT -->
   <h2>Departures - AIX Security-COK</h2>
   <table id="departures-table">
     <thead>
@@ -170,7 +172,7 @@
     };
 
     const toLocalTime = ts =>
-      ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+      ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : "-";
 
     const classifyStatus = (estimated, scheduled) => {
       if (!estimated || !scheduled) return "status-green";
@@ -202,93 +204,30 @@
       const sortOption = document.getElementById("sortOption").value;
       const now = Math.floor(Date.now() / 1000);
 
-      // Log for debugging
-      console.log(`Processing ${type}, found ${flights.length} flights`);
+      return flights.filter(f => {
+        const fn = f.flight?.identification?.number?.default || "";
+        const airlineCode = fn.substring(0, 2);
+        const est = type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival;
+        const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
+        const latestTime = est || sch;
 
-      let filtered = flights.filter(f => {
-        try {
-          // Check if flight object is properly structured
-          if (!f.flight || !f.flight.identification) {
-            console.log("Malformed flight object:", f);
-            return false;
-          }
+        if (latestTime < now) return false;
 
-          const fn = f.flight.identification.number?.default || "";
-          const airlineCode = fn.substring(0, 2);
-          
-          // Get estimated and scheduled times
-          let estTime, schTime;
-          
-          if (type === "departures") {
-            estTime = f.flight.time?.estimated?.departure;
-            schTime = f.flight.time?.scheduled?.departure;
-          } else {
-            estTime = f.flight.time?.estimated?.arrival;
-            schTime = f.flight.time?.scheduled?.arrival;
-          }
-          
-          // For delayed flights: check if estimated time is in the future
-          // For on-time flights: check if scheduled time is in the future
-          // This ensures we show delayed flights where ETA > current time
-          const relevantTimeForFiltering = estTime || schTime;
-          
-          // Filter out past flights - only if they have no future ETA/STA
-          if (relevantTimeForFiltering && relevantTimeForFiltering < now) {
-            console.log(`Filtered out past flight ${fn}`);
-            return false;
-          }
-          
-          // Special handling for delayed flights
-          if (estTime && schTime) {
-            const isDelayed = estTime > schTime;
-            // If it's a delayed flight and the ETA is in the future, show it
-            if (isDelayed && estTime >= now) {
-              console.log(`Keeping delayed flight ${fn} with future ETA`);
-              // Continue to airline filtering
-            }
-          }
-
-          // ✅ Airline filter
-          if (filterValue === "IX") {
-            return fn.startsWith("IX");
-          } else if (filterValue === "IXAI") {
-            return fn.startsWith("IX") || fn.startsWith("AI");
-          } else if (filterValue === "IXOAL") {
-            return fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
-          }
-          return false;
-        } catch (err) {
-          console.error("Error processing flight:", err);
-          return false;
+        if (filterValue === "IX") {
+          return fn.startsWith("IX");
+        } else if (filterValue === "IXAI") {
+          return fn.startsWith("IX") || fn.startsWith("AI");
+        } else {
+          return fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
         }
+      }).sort((a, b) => {
+        const getTime = f => {
+          return sortOption === "estimated"
+            ? (type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival) || 0
+            : (type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival) || 0;
+        };
+        return getTime(a) - getTime(b);
       });
-
-      console.log(`After filtering: ${filtered.length} flights remain for ${type}`);
-
-      // Add safe error handling for sorting
-      const sortKey = sortOption === "estimated"
-        ? (f => {
-            try {
-              return type === "departures" 
-                ? (f.flight.time.estimated?.departure || f.flight.time.scheduled?.departure || 0)
-                : (f.flight.time.estimated?.arrival || f.flight.time.scheduled?.arrival || 0);
-            } catch (err) {
-              console.error("Sort error:", err);
-              return 0;
-            }
-          })
-        : (f => {
-            try {
-              return type === "departures" 
-                ? (f.flight.time.scheduled?.departure || f.flight.time.estimated?.departure || 0)
-                : (f.flight.time.scheduled?.arrival || f.flight.time.estimated?.arrival || 0);
-            } catch (err) {
-              console.error("Sort error:", err);
-              return 0;
-            }
-          });
-
-      return filtered.sort((a, b) => sortKey(a) - sortKey(b));
     };
 
     const loadFlights = async (type) => {
@@ -300,28 +239,30 @@
         tbody.innerHTML = "";
 
         const filteredFlights = filterAndSortFlights(flights, type);
-
-        filteredFlights.forEach(flight => {
-          const fl = flight.flight;
-          const isDeparture = type === "departures";
-          const est = isDeparture ? fl.time.estimated.departure : fl.time.estimated.arrival;
-          const sch = isDeparture ? fl.time.scheduled.departure : fl.time.scheduled.arrival;
-          const flightNum = fl.identification.number.default || "-";
-          const logo = getLogoURL(flightNum);
+        filteredFlights.forEach(f => {
+          const fl = f.flight;
+          const isDep = type === "departures";
+          const est = isDep ? fl.time.estimated?.departure : fl.time.estimated?.arrival;
+          const sch = isDep ? fl.time.scheduled?.departure : fl.time.scheduled?.arrival;
+          const fn = fl.identification.number?.default || "-";
+          const logo = getLogoURL(fn);
+          const reg = fl.aircraft?.registration || "-";
+          const airportCode = isDep ? fl.airport.destination?.code?.iata : fl.airport.origin?.code?.iata || "-";
+          const model = fl.aircraft?.model?.text || "-";
+          const status = fl.status?.text || "-";
 
           const row = document.createElement("tr");
           row.innerHTML = `
-            <td><img class="flight-logo" src="${logo}" alt="logo"> ${flightNum}</td>
-            <td>${fl.aircraft?.registration || "-"}</td>
-            <td>${isDeparture ? fl.airport.destination?.code.iata : fl.airport.origin?.code.iata || "-"}</td>
+            <td><img class="flight-logo" src="${logo}" alt="logo"> ${fn}</td>
+            <td>${reg}</td>
+            <td>${airportCode}</td>
             <td>${toLocalTime(est)}</td>
             <td>${toLocalTime(sch)}</td>
-            <td>${fl.aircraft?.model?.text || "-"}</td>
-            <td class="${classifyStatus(est, sch)}">${fl.status?.text || "-"}</td>
+            <td>${model}</td>
+            <td class="${classifyStatus(est, sch)}">${status}</td>
           `;
           tbody.appendChild(row);
         });
-
       } catch (err) {
         console.error(`Error loading ${type}:`, err);
       }
@@ -332,7 +273,6 @@
       loadFlights("departures");
     };
 
-    // Theme toggle functionality
     const themeToggle = document.getElementById("themeToggle");
     const setTheme = (theme) => {
       document.documentElement.setAttribute("data-theme", theme);
@@ -350,12 +290,12 @@
       setTheme(currentTheme === "dark" ? "light" : "dark");
     });
 
+    document.getElementById("airlineFilter").addEventListener("change", refreshAllFlights);
+    document.getElementById("sortOption").addEventListener("change", refreshAllFlights);
+
     initializeTheme();
     refreshAllFlights();
     setInterval(refreshAllFlights, 30000);
-
-    document.getElementById("airlineFilter").addEventListener("change", refreshAllFlights);
-    document.getElementById("sortOption").addEventListener("change", refreshAllFlights);
   </script>
 
 </body>
