@@ -181,41 +181,44 @@
     };
 
     const filterAndSortFlights = (flights, type) => {
-      const filterValue = document.getElementById("airlineFilter").value;
-      const sortOption = document.getElementById("sortOption").value;
-      const now = Math.floor(Date.now() / 1000);
+    const filterValue = document.getElementById("airlineFilter").value;
+    const sortOption = document.getElementById("sortOption").value;
+    const now = Math.floor(Date.now() / 1000);
 
-      return flights.filter(f => {
-        const fn = f.flight?.identification?.number?.default || "";
-        const airlineCode = fn.substring(0, 2);
-        const est = type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival;
-        const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
+    return flights.filter(f => {
+      const fn = f.flight?.identification?.number?.default || "";
+      const airlineCode = fn.substring(0, 2);
+      const est = type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival;
+      const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
+      const act = type === "departures" ? f.flight.time.actual?.departure : f.flight.time.actual?.arrival;
 
-        if (filterValue === "IX" && !fn.startsWith("IX")) return false;
-        if (filterValue === "IXAI" && !(fn.startsWith("IX") || fn.startsWith("AI"))) return false;
-        if (filterValue === "IXOAL" && !(fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode))) return false;
+      // Include flights that have not yet occurred or have occurred today
+      const flightTime = est || sch;
+      const flightDate = new Date((flightTime || now) * 1000);
+      const today = new Date();
+      const isToday = flightDate.toDateString() === today.toDateString();
 
-        return true;
-      }).sort((a, b) => {
-        const now = Math.floor(Date.now() / 1000);
-        const getTime = (f, kind) =>
-          kind === "estimated"
-            ? (type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival) || 0
-            : (type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival) || 0;
+      // Show flights scheduled for today that haven't occurred yet
+      if (isToday && (!act || act > now)) {
+        if (filterValue === "IX") {
+          return fn.startsWith("IX");
+        } else if (filterValue === "IXAI") {
+          return fn.startsWith("IX") || fn.startsWith("AI");
+        } else {
+          return fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
+        }
+      }
+      return false;
+    }).sort((a, b) => {
+      const getTime = f => {
+        return sortOption === "estimated"
+          ? (type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival) || 0
+          : (type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival) || 0;
+      };
+      return getTime(a) - getTime(b);
+    });
+  };
 
-        const getETA = f => (type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival) || 0;
-
-        const etaA = getETA(a);
-        const etaB = getETA(b);
-
-        const isFutureA = etaA > now;
-        const isFutureB = etaB > now;
-
-        if (isFutureA !== isFutureB) return isFutureA ? -1 : 1;
-
-        return getTime(a, sortOption) - getTime(b, sortOption);
-      });
-    };
 
     const loadFlights = async (type) => {
       try {
