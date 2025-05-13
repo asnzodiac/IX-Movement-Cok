@@ -297,6 +297,38 @@
     refreshAllFlights();
     setInterval(refreshAllFlights, 30000);
   </script>
+<script>
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(reg => console.log("SW registered", reg))
+        .catch(err => console.error("SW registration failed:", err));
+    });
+  }
+
+  // Install prompt
+  let deferredPrompt;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+
+    const installBtn = document.createElement("button");
+    installBtn.textContent = "Install App";
+    installBtn.style = "position:fixed;bottom:10px;right:10px;z-index:1000;";
+    installBtn.onclick = () => {
+      installBtn.remove();
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(choice => {
+        if (choice.outcome === 'accepted') {
+          console.log("App installed");
+        }
+        deferredPrompt = null;
+      });
+    };
+    document.body.appendChild(installBtn);
+  });
+</script>
 
 </body>
 </html>
