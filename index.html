@@ -2,16 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title> AIX COK </title>
+  <title>IX & AI Flights - COK</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
-      position: relative;
     }
     h2 {
       background: #f0f0f0;
       padding: 10px;
+    }
+    .controls {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+    select {
+      padding: 5px;
     }
     table {
       width: 100%;
@@ -31,24 +39,45 @@
       page-break-before: always;
       margin-top: 50px;
     }
-    #toggle-button {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 10px 15px;
-      background-color: #333;
-      color: white;
-      border: none;
-      cursor: pointer;
-      border-radius: 5px;
+    .status-green {
+      color: green;
+      font-weight: bold;
+    }
+    .status-orange {
+      color: orange;
+      font-weight: bold;
+    }
+    .status-red {
+      color: red;
+      font-weight: bold;
+    }
+    .flight-logo {
+      height: 16px;
+      vertical-align: middle;
+      margin-right: 5px;
     }
   </style>
 </head>
 <body>
 
-  <button id="toggle-button">Show AI Flights</button>
+  <div class="controls">
+    <label>
+      Airline Filter:
+      <select id="airlineFilter">
+        <option value="IX" selected>IX Only</option>
+        <option value="IXAI">IX + AI</option>
+      </select>
+    </label>
+    <label>
+      Sort by:
+      <select id="sortOption">
+        <option value="scheduled" selected>STA / STD</option>
+        <option value="estimated">ETA / ETD</option>
+      </select>
+    </label>
+  </div>
 
-  <h2>Departures - AIX COK </h2>
+  <h2>Departures - IX / AI - COK</h2>
   <table id="departures-table">
     <thead>
       <tr>
@@ -66,7 +95,7 @@
 
   <div class="page-break"></div>
 
-  <h2>Arrivals - AIX COK</h2>
+  <h2>Arrivals - IX / AI - COK</h2>
   <table id="arrivals-table">
     <thead>
       <tr>
@@ -84,72 +113,103 @@
 
   <script>
     const baseUrl = "https://api.flightradar24.com/common/v1/airport.json?code=cok";
-    let showAIFilter = false;
 
-    function getEndpoint(type) {
+    const getEndpoint = (type) => {
       const timestamp = Math.floor(Date.now() / 1000);
-      return `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${timestamp}&page=1&limit=100&token=tBLlkORA7VvLRLkWBpJ0obhzt8J33yvwd4JF3qppW7o&pk=3a47355bf33dbc42`;
-    }
+      return `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${timestamp}&page=1&limit=100`;
+    };
 
     const toLocalTime = ts =>
       ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
 
-    async function loadFlights(type) {
+    const classifyStatus = (estimated, scheduled) => {
+      if (!estimated || !scheduled) return "status-green";
+      const delay = estimated - scheduled;
+      if (delay <= 0) return "status-green";
+      if (delay <= 900) return "status-orange";
+      return "status-red";
+    };
+
+    const getLogoURL = (flightNumber) => {
+      if (flightNumber.startsWith("IX")) {
+        return "https://cdn.brandfetch.io/idM6IAvrlf/w/820/h/248/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
+      } else if (flightNumber.startsWith("AI")) {
+        return "https://cdn.brandfetch.io/id-PSmaCm4/w/800/h/284/theme/light/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
+      }
+      return "";
+    };
+
+    const filterAndSortFlights = (flights, type) => {
+      const filterValue = document.getElementById("airlineFilter").value;
+      const sortOption = document.getElementById("sortOption").value;
+
+      let filtered = flights.filter(f => {
+        const fn = f.flight.identification.number?.default || "";
+        if (filterValue === "IX") {
+          return fn.startsWith("IX");
+        } else if (filterValue === "IXAI") {
+          return fn.startsWith("IX") || fn.startsWith("AI");
+        }
+        return false;
+      });
+
+      const sortKey = sortOption === "estimated"
+        ? (f => type === "departures" ? f.flight.time.estimated.departure : f.flight.time.estimated.arrival)
+        : (f => type === "departures" ? f.flight.time.scheduled.departure : f.flight.time.scheduled.arrival);
+
+      return filtered.sort((a, b) => sortKey(a) - sortKey(b));
+    };
+
+    const loadFlights = async (type) => {
       try {
         const res = await fetch(getEndpoint(type));
         const data = await res.json();
         const flights = data.result.response.airport.pluginData.schedule[type].data;
-
-        const filteredFlights = flights.filter(f => {
-          const number = f.flight.identification.number.default || "";
-          if (showAIFilter) {
-            return number.startsWith("IX") || number.startsWith("AI");
-          } else {
-            return number.startsWith("IX");
-          }
-        });
-
         const tbody = document.querySelector(`#${type}-table tbody`);
         tbody.innerHTML = "";
+
+        const filteredFlights = filterAndSortFlights(flights, type);
 
         filteredFlights.forEach(flight => {
           const fl = flight.flight;
           const isDeparture = type === "departures";
+          const est = isDeparture ? fl.time.estimated.departure : fl.time.estimated.arrival;
+          const sch = isDeparture ? fl.time.scheduled.departure : fl.time.scheduled.arrival;
+          const flightNum = fl.identification.number.default || "-";
+          const logo = getLogoURL(flightNum);
 
           const row = document.createElement("tr");
           row.innerHTML = `
-            <td>${fl.identification.number.default || "-"}</td>
+            <td><img class="flight-logo" src="${logo}" alt="logo"> ${flightNum}</td>
             <td>${fl.aircraft?.registration || "-"}</td>
             <td>${isDeparture ? fl.airport.destination?.code.iata : fl.airport.origin?.code.iata || "-"}</td>
-            <td>${toLocalTime(isDeparture ? fl.time.estimated.departure : fl.time.estimated.arrival)}</td>
-            <td>${toLocalTime(isDeparture ? fl.time.scheduled.departure : fl.time.scheduled.arrival)}</td>
+            <td>${toLocalTime(est)}</td>
+            <td>${toLocalTime(sch)}</td>
             <td>${fl.aircraft?.model?.text || "-"}</td>
-            <td>${fl.status?.text || "-"}</td>
+            <td class="${classifyStatus(est, sch)}">${fl.status?.text || "-"}</td>
           `;
           tbody.appendChild(row);
         });
 
       } catch (err) {
-        console.error(`Error fetching ${type}:`, err);
+        console.error(`Error loading ${type}:`, err);
       }
-    }
+    };
 
-    function refreshAllFlights() {
+    const refreshAllFlights = () => {
       loadFlights("departures");
       loadFlights("arrivals");
-    }
+    };
 
-    document.getElementById("toggle-button").addEventListener("click", () => {
-      showAIFilter = !showAIFilter;
-      document.getElementById("toggle-button").textContent = showAIFilter ? "Hide AI Flights" : "Show AI Flights";
-      refreshAllFlights();
-    });
-
-    // Initial load
+    // Load initially
     refreshAllFlights();
 
     // Refresh every 30 seconds
     setInterval(refreshAllFlights, 30000);
+
+    // Refresh on filter change
+    document.getElementById("airlineFilter").addEventListener("change", refreshAllFlights);
+    document.getElementById("sortOption").addEventListener("change", refreshAllFlights);
   </script>
 
 </body>
