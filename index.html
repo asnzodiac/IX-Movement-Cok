@@ -4,63 +4,110 @@
   <meta charset="UTF-8">
   <title>AIX SEC OPS- Aswin COK</title>
   <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --header-bg: #f0f0f0;
+      --table-header-bg: #333333;
+      --table-header-text: #ffffff;
+      --border-color: #cccccc;
+      --control-bg: #ffffff;
+      --control-text: #000000;
+    }
+
+    [data-theme="dark"] {
+      --bg-color: #1a1a1a;
+      --text-color: #ffffff;
+      --header-bg: #2a2a2a;
+      --table-header-bg: #444444;
+      --table-header-text: #ffffff;
+      --border-color: #555555;
+      --control-bg: #333333;
+      --control-text: #ffffff;
+    }
+
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: all 0.3s ease;
     }
+
     h2 {
-      background: #f0f0f0;
+      background: var(--header-bg);
       padding: 10px;
+      color: var(--text-color);
     }
+
     .controls {
       display: flex;
       justify-content: flex-end;
       margin-bottom: 10px;
       gap: 10px;
     }
-    select {
+
+    select, button {
       padding: 5px;
+      background-color: var(--control-bg);
+      color: var(--control-text);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 40px;
     }
+
     th, td {
-      border: 1px solid #ccc;
+      border: 1px solid var(--border-color);
       padding: 8px;
       text-align: center;
     }
+
     th {
-      background-color: #333;
-      color: white;
+      background-color: var(--table-header-bg);
+      color: var(--table-header-text);
     }
+
     .page-break {
       page-break-before: always;
       margin-top: 50px;
     }
+
     .status-green {
       color: green;
       font-weight: bold;
     }
+
     .status-orange {
       color: orange;
       font-weight: bold;
     }
+
     .status-red {
       color: red;
       font-weight: bold;
     }
+
     .flight-logo {
       height: 16px;
       vertical-align: middle;
       margin-right: 5px;
+    }
+
+    #themeToggle {
+      cursor: pointer;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
 
   <div class="controls">
+    <button id="themeToggle">Toggle Dark Mode</button>
     <label>
       Airline Filter:
       <select id="airlineFilter">
@@ -216,8 +263,26 @@
       loadFlights("departures");
     };
 
-    refreshAllFlights();
+    // Theme toggle functionality
+    const themeToggle = document.getElementById("themeToggle");
+    const setTheme = (theme) => {
+      document.documentElement.setAttribute("data-theme", theme);
+      themeToggle.textContent = theme === "dark" ? "Toggle Light Mode" : "Toggle Dark Mode";
+      localStorage.setItem("theme", theme);
+    };
 
+    const initializeTheme = () => {
+      const savedTheme = localStorage.getItem("theme") || "light";
+      setTheme(savedTheme);
+    };
+
+    themeToggle.addEventListener("click", () => {
+      const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+      setTheme(currentTheme === "dark" ? "light" : "dark");
+    });
+
+    initializeTheme();
+    refreshAllFlights();
     setInterval(refreshAllFlights, 30000);
 
     document.getElementById("airlineFilter").addEventListener("change", refreshAllFlights);
