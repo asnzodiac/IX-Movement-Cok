@@ -200,24 +200,93 @@
     const filterAndSortFlights = (flights, type) => {
       const filterValue = document.getElementById("airlineFilter").value;
       const sortOption = document.getElementById("sortOption").value;
+      const now = Math.floor(Date.now() / 1000);
+
+      // Log for debugging
+      console.log(`Processing ${type}, found ${flights.length} flights`);
 
       let filtered = flights.filter(f => {
-        const fn = f.flight.identification.number?.default || "";
-        const airlineCode = fn.substring(0, 2);
+        try {
+          // Check if flight object is properly structured
+          if (!f.flight || !f.flight.identification) {
+            console.log("Malformed flight object:", f);
+            return false;
+          }
 
-        if (filterValue === "IX") {
-          return fn.startsWith("IX");
-        } else if (filterValue === "IXAI") {
-          return fn.startsWith("IX") || fn.startsWith("AI");
-        } else if (filterValue === "IXOAL") {
-          return fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
+          const fn = f.flight.identification.number?.default || "";
+          const airlineCode = fn.substring(0, 2);
+          
+          // Get estimated and scheduled times
+          let estTime, schTime;
+          
+          if (type === "departures") {
+            estTime = f.flight.time?.estimated?.departure;
+            schTime = f.flight.time?.scheduled?.departure;
+          } else {
+            estTime = f.flight.time?.estimated?.arrival;
+            schTime = f.flight.time?.scheduled?.arrival;
+          }
+          
+          // For delayed flights: check if estimated time is in the future
+          // For on-time flights: check if scheduled time is in the future
+          // This ensures we show delayed flights where ETA > current time
+          const relevantTimeForFiltering = estTime || schTime;
+          
+          // Filter out past flights - only if they have no future ETA/STA
+          if (relevantTimeForFiltering && relevantTimeForFiltering < now) {
+            console.log(`Filtered out past flight ${fn}`);
+            return false;
+          }
+          
+          // Special handling for delayed flights
+          if (estTime && schTime) {
+            const isDelayed = estTime > schTime;
+            // If it's a delayed flight and the ETA is in the future, show it
+            if (isDelayed && estTime >= now) {
+              console.log(`Keeping delayed flight ${fn} with future ETA`);
+              // Continue to airline filtering
+            }
+          }
+
+          // ✅ Airline filter
+          if (filterValue === "IX") {
+            return fn.startsWith("IX");
+          } else if (filterValue === "IXAI") {
+            return fn.startsWith("IX") || fn.startsWith("AI");
+          } else if (filterValue === "IXOAL") {
+            return fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
+          }
+          return false;
+        } catch (err) {
+          console.error("Error processing flight:", err);
+          return false;
         }
-        return false;
       });
 
+      console.log(`After filtering: ${filtered.length} flights remain for ${type}`);
+
+      // Add safe error handling for sorting
       const sortKey = sortOption === "estimated"
-        ? (f => type === "departures" ? f.flight.time.estimated.departure : f.flight.time.estimated.arrival)
-        : (f => type === "departures" ? f.flight.time.scheduled.departure : f.flight.time.scheduled.arrival);
+        ? (f => {
+            try {
+              return type === "departures" 
+                ? (f.flight.time.estimated?.departure || f.flight.time.scheduled?.departure || 0)
+                : (f.flight.time.estimated?.arrival || f.flight.time.scheduled?.arrival || 0);
+            } catch (err) {
+              console.error("Sort error:", err);
+              return 0;
+            }
+          })
+        : (f => {
+            try {
+              return type === "departures" 
+                ? (f.flight.time.scheduled?.departure || f.flight.time.estimated?.departure || 0)
+                : (f.flight.time.scheduled?.arrival || f.flight.time.estimated?.arrival || 0);
+            } catch (err) {
+              console.error("Sort error:", err);
+              return 0;
+            }
+          });
 
       return filtered.sort((a, b) => sortKey(a) - sortKey(b));
     };
