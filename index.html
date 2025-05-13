@@ -2,161 +2,62 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AIX SEC OPS - Aswin COK</title>
-  <meta name="theme-color" content="#000000" />
-  <link rel="manifest" href="manifest.json" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flight Tracker - COK</title>
   <style>
-    :root {
-      --bg-color: #ffffff;
-      --text-color: #000000;
-      --header-bg: #f0f0f0;
-      --table-header-bg: #333333;
-      --table-header-text: #ffffff;
-      --border-color: #cccccc;
-      --control-bg: #ffffff;
-      --control-text: #000000;
-    }
-
-    [data-theme="dark"] {
-      --bg-color: #1a1a1a;
-      --text-color: #ffffff;
-      --header-bg: #2a2a2a;
-      --table-header-bg: #444444;
-      --table-header-text: #ffffff;
-      --border-color: #555555;
-      --control-bg: #333333;
-      --control-text: #ffffff;
-    }
-
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      transition: all 0.3s ease;
-    }
-
-    h2 {
-      background: var(--header-bg);
-      padding: 10px;
-      color: var(--text-color);
-    }
-
-    .controls {
-      display: flex;
-      justify-content: flex-end;
-      margin-bottom: 10px;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    select, button {
-      padding: 5px;
-      background-color: var(--control-bg);
-      color: var(--control-text);
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 40px;
-    }
-
-    th, td {
-      border: 1px solid var(--border-color);
-      padding: 8px;
-      text-align: center;
-    }
-
-    th {
-      background-color: var(--table-header-bg);
-      color: var(--table-header-text);
-    }
-
-    .page-break {
-      page-break-before: always;
-      margin-top: 50px;
-    }
-
-    .status-green {
-      color: green;
-      font-weight: bold;
-    }
-
-    .status-orange {
-      color: orange;
-      font-weight: bold;
-    }
-
-    .status-red {
-      color: red;
-      font-weight: bold;
-    }
-
-    .flight-logo {
-      height: 16px;
-      vertical-align: middle;
-      margin-right: 5px;
-    }
-
-    #themeToggle {
-      cursor: pointer;
-      font-size: 14px;
-    }
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+    h1 { text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background: #333; color: white; }
+    tr:nth-child(even) { background-color: #f2f2f2; }
+    tr.delayed { background-color: #ffe0e0; }
+    .controls { text-align: center; margin-bottom: 20px; }
+    select { padding: 6px; margin: 0 10px; }
   </style>
 </head>
 <body>
+  <h1>Live Flight Status - COK</h1>
 
   <div class="controls">
-    <button id="themeToggle">Toggle Dark Mode</button>
-    <label>
-      Airline Filter:
-      <select id="airlineFilter">
-        <option value="IX">AIX Only</option>
-        <option value="IXAI">AIX + AI</option>
-        <option value="IXOAL" selected>AIX + OAL</option>
-      </select>
-    </label>
-    <label>
-      Sort by:
-      <select id="sortOption">
-        <option value="scheduled" selected>STA / STD</option>
-        <option value="estimated">ETA / ETD</option>
-      </select>
-    </label>
+    <label for="airlineFilter">Filter:</label>
+    <select id="airlineFilter" onchange="renderTables()">
+      <option value="IX">IX Only</option>
+      <option value="IXAI">IX + AI</option>
+      <option value="ALL">All</option>
+    </select>
+
+    <label for="sortOption">Sort By:</label>
+    <select id="sortOption" onchange="renderTables()">
+      <option value="estimated">Estimated</option>
+      <option value="scheduled">Scheduled</option>
+    </select>
   </div>
 
-  <h2>Arrivals - AIX Security-COK</h2>
-  <table id="arrivals-table">
+  <h2>Arrivals</h2>
+  <table id="arrivalsTable">
     <thead>
       <tr>
-        <th>Flight No</th>
-        <th>Registration</th>
+        <th>Flight</th>
+        <th>Logo</th>
         <th>From</th>
-        <th>ETA</th>
         <th>STA</th>
-        <th>Aircraft</th>
+        <th>ETA</th>
         <th>Status</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
 
-  <div class="page-break"></div>
-
-  <h2>Departures - AIX Security-COK</h2>
-  <table id="departures-table">
+  <h2>Departures</h2>
+  <table id="departuresTable">
     <thead>
       <tr>
-        <th>Flight No</th>
-        <th>Registration</th>
+        <th>Flight</th>
+        <th>Logo</th>
         <th>To</th>
-        <th>ETD</th>
         <th>STD</th>
-        <th>Aircraft</th>
+        <th>ETD</th>
         <th>Status</th>
       </tr>
     </thead>
@@ -164,39 +65,30 @@
   </table>
 
   <script>
-    const baseUrl = "https://api.flightradar24.com/common/v1/airport.json?code=cok";
-
-    const getEndpoint = (type) => {
-      const timestamp = Math.floor(Date.now() / 1000);
-      return `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${timestamp}&page=1&limit=100`;
-    };
-
-    const toLocalTime = ts =>
-      ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : "-";
-
-    const classifyStatus = (estimated, scheduled) => {
-      if (!estimated || !scheduled) return "status-green";
-      const delay = estimated - scheduled;
-      if (delay <= 0) return "status-green";
-      if (delay <= 900) return "status-orange";
-      return "status-red";
-    };
-
-    const getLogoURL = (flightNumber) => {
-      if (flightNumber.startsWith("IX")) {
-        return "https://cdn.brandfetch.io/idM6IAvrlf/w/820/h/248/theme/dark/logo.png";
-      } else if (flightNumber.startsWith("AI")) {
-        return "https://cdn.brandfetch.io/id-PSmaCm4/w/800/h/284/theme/light/logo.png";
-      } else if (flightNumber.startsWith("UL")) {
-        return "https://cdn.brandfetch.io/idZQkqhbVi/w/800/h/578/theme/dark/symbol.png";
-      } else if (flightNumber.startsWith("AK") || flightNumber.startsWith("FD")) {
-        return "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/AirAsia_New_Logo_%282020%29.svg/768px-AirAsia_New_Logo_%282020%29.svg.png";
-      } else if (flightNumber.startsWith("FZ")) {
-        return "https://cdn.brandfetch.io/idzRsGDSFE/w/800/h/162/theme/dark/logo.png";
-      } else if (flightNumber.startsWith("J9")) {
-        return "https://cdn.brandfetch.io/idRWbgTyu0/w/800/h/248/theme/dark/logo.png";
+    const fetchFlights = async () => {
+      try {
+        const res = await fetch('https://your-api-url.com/flights'); // Replace with actual API
+        return await res.json();
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        return { arrivals: [], departures: [] };
       }
-      return "";
+    };
+
+    const formatTime = ts => {
+      if (!ts) return "-";
+      const d = new Date(ts * 1000);
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const getStatus = (sch, est) => {
+      if (!est) return "Scheduled";
+      if (est > sch) return "Delayed";
+      return "On Time";
+    };
+
+    const getLogo = airlineCode => {
+      return `<img src="https://content.airhex.com/content/logos/airlines_${airlineCode}_64.png" height="24" alt="${airlineCode}">`;
     };
 
     const filterAndSortFlights = (flights, type) => {
@@ -205,17 +97,13 @@
       const now = Math.floor(Date.now() / 1000);
 
       return flights.filter(f => {
-        const fl = f.flight;
-        const fn = fl?.identification?.number?.default || "";
+        const fn = f.flight?.identification?.number?.default || "";
         const airlineCode = fn.substring(0, 2);
-        const est = type === "departures" ? fl?.time?.estimated?.departure : fl?.time?.estimated?.arrival;
-        const sch = type === "departures" ? fl?.time?.scheduled?.departure : fl?.time?.scheduled?.arrival;
+        const est = type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival;
+        const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
 
-        const showDelayed =
-          (est && est > now) ||  // show if estimated time is in future
-          (fl?.status?.live || (fl?.status?.icon && fl?.status?.icon.includes("active"))); // OR still marked live
-
-        if (!showDelayed) return false;
+        // Show if ETA/ETD or STA/STD is still in the future
+        if ((sch && sch < now) && (est && est < now)) return false;
 
         if (filterValue === "IX") {
           return fn.startsWith("IX");
@@ -225,114 +113,55 @@
           return fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
         }
       }).sort((a, b) => {
-        const getTime = f =>
-          sortOption === "estimated"
+        const getTime = f => {
+          return sortOption === "estimated"
             ? (type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival) || 0
             : (type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival) || 0;
+        };
         return getTime(a) - getTime(b);
       });
     };
 
-    const loadFlights = async (type) => {
-      try {
-        const res = await fetch(getEndpoint(type));
-        const data = await res.json();
-        const flights = data.result.response.airport.pluginData.schedule[type].data;
-        const tbody = document.querySelector(`#${type}-table tbody`);
-        tbody.innerHTML = "";
+    const renderTable = (flights, type) => {
+      const tableBody = document.getElementById(`${type}Table`).querySelector("tbody");
+      tableBody.innerHTML = "";
 
-        const filteredFlights = filterAndSortFlights(flights, type);
-        filteredFlights.forEach(f => {
-          const fl = f.flight;
-          const isDep = type === "departures";
-          const est = isDep ? fl.time.estimated?.departure : fl.time.estimated?.arrival;
-          const sch = isDep ? fl.time.scheduled?.departure : fl.time.scheduled?.arrival;
-          const fn = fl.identification.number?.default || "-";
-          const logo = getLogoURL(fn);
-          const reg = fl.aircraft?.registration || "-";
-          const airportCode = isDep ? fl.airport.destination?.code?.iata : fl.airport.origin?.code?.iata || "-";
-          const model = fl.aircraft?.model?.text || "-";
-          const status = fl.status?.text || "-";
+      flights.forEach(f => {
+        const fn = f.flight?.identification?.number?.default || "";
+        const reg = f.flight?.aircraft?.registration || "";
+        const origin = f.flight?.airport?.origin?.name || "-";
+        const dest = f.flight?.airport?.destination?.name || "-";
+        const airlineCode = fn.substring(0, 2);
 
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td><img class="flight-logo" src="${logo}" alt="logo"> ${fn}</td>
-            <td>${reg}</td>
-            <td>${airportCode}</td>
-            <td>${toLocalTime(est)}</td>
-            <td>${toLocalTime(sch)}</td>
-            <td>${model}</td>
-            <td class="${classifyStatus(est, sch)}">${status}</td>
-          `;
-          tbody.appendChild(row);
-        });
-      } catch (err) {
-        console.error(`Error loading ${type}:`, err);
-      }
-    };
+        const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
+        const est = type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival;
 
-    const refreshAllFlights = () => {
-      loadFlights("arrivals");
-      loadFlights("departures");
-    };
+        const row = document.createElement("tr");
+        if (est && sch && est > sch) row.classList.add("delayed");
 
-    const themeToggle = document.getElementById("themeToggle");
-    const setTheme = (theme) => {
-      document.documentElement.setAttribute("data-theme", theme);
-      themeToggle.textContent = theme === "dark" ? "Toggle Light Mode" : "Toggle Dark Mode";
-      localStorage.setItem("theme", theme);
-    };
-
-    const initializeTheme = () => {
-      const savedTheme = localStorage.getItem("theme") || "light";
-      setTheme(savedTheme);
-    };
-
-    themeToggle.addEventListener("click", () => {
-      const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-      setTheme(currentTheme === "dark" ? "light" : "dark");
-    });
-
-    document.getElementById("airlineFilter").addEventListener("change", refreshAllFlights);
-    document.getElementById("sortOption").addEventListener("change", refreshAllFlights);
-
-    initializeTheme();
-    refreshAllFlights();
-    setInterval(refreshAllFlights, 30000);
-  </script>
-
-  <script>
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
-          .then(reg => console.log("SW registered", reg))
-          .catch(err => console.error("SW registration failed:", err));
+        row.innerHTML = `
+          <td>${fn} (${reg})</td>
+          <td>${getLogo(airlineCode)}</td>
+          <td>${type === "departures" ? dest : origin}</td>
+          <td>${formatTime(sch)}</td>
+          <td>${formatTime(est)}</td>
+          <td>${getStatus(sch, est)}</td>
+        `;
+        tableBody.appendChild(row);
       });
-    }
+    };
 
-    // Install prompt
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
+    const renderTables = async () => {
+      const data = await fetchFlights();
+      const arrivals = filterAndSortFlights(data.arrivals || [], "arrivals");
+      const departures = filterAndSortFlights(data.departures || [], "departures");
 
-      const installBtn = document.createElement("button");
-      installBtn.textContent = "Install App";
-      installBtn.style = "position:fixed;bottom:10px;right:10px;z-index:1000;";
-      installBtn.onclick = () => {
-        installBtn.remove();
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then(choice => {
-          if (choice.outcome === 'accepted') {
-            console.log("App installed");
-          }
-          deferredPrompt = null;
-        });
-      };
-      document.body.appendChild(installBtn);
-    });
+      renderTable(arrivals, "arrivals");
+      renderTable(departures, "departures");
+    };
+
+    renderTables();
+    setInterval(renderTables, 60000); // Refresh every 60 sec
   </script>
-
 </body>
 </html>
