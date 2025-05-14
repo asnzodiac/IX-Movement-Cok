@@ -161,18 +161,15 @@
     .delayed-row { 
       background-color: var(--delayed-row-bg); 
       border-left: 4px solid red;
+      animation: highlight-pulse 2s infinite;
     }
+
     .completed-row { background-color: var(--completed-row-bg); }
-    
-    /* Add highlight animation for delayed flights */
+
     @keyframes highlight-pulse {
       0% { box-shadow: 0 0 0 0 rgba(255, 204, 0, 0.4); }
       70% { box-shadow: 0 0 0 10px rgba(255, 204, 0, 0); }
       100% { box-shadow: 0 0 0 0 rgba(255, 204, 0, 0); }
-    }
-    
-    .delayed-row {
-      animation: highlight-pulse 2s infinite;
     }
 
     .flight-logo {
@@ -185,74 +182,6 @@
       text-align: center;
       padding: 20px;
       font-style: italic;
-    }
-
-    .weather-container {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-
-    .weather-info {
-      flex: 1;
-      min-width: 300px;
-      background-color: var(--secondary-color);
-      border-radius: 8px;
-      padding: 15px;
-    }
-
-    .weather-title {
-      margin-top: 0;
-      margin-bottom: 10px;
-      font-size: 1.2rem;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 8px;
-    }
-
-    .weather-data {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-      gap: 10px;
-    }
-
-    .weather-item {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .weather-label {
-      font-size: 0.8rem;
-      opacity: 0.7;
-    }
-
-    .weather-value {
-      font-size: 1.1rem;
-      font-weight: bold;
-    }
-
-    .runways-container {
-      flex: 1;
-      min-width: 300px;
-      background-color: var(--secondary-color);
-      border-radius: 8px;
-      padding: 15px;
-    }
-
-    .runways-title {
-      margin-top: 0;
-      margin-bottom: 10px;
-      font-size: 1.2rem;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 8px;
-    }
-
-    .runway-item {
-      margin-bottom: 10px;
-      padding: 8px;
-      border-radius: 4px;
-      background-color: var(--bg-color);
     }
 
     .install-button {
@@ -280,16 +209,16 @@
         flex-direction: column;
         align-items: stretch;
       }
-      
+
       .control-group {
         justify-content: space-between;
       }
-      
+
       th, td {
         padding: 6px;
         font-size: 0.9rem;
       }
-      
+
       .flight-logo {
         height: 16px;
       }
@@ -348,6 +277,7 @@
             </select>
           </label>
           <button id="refreshButton">Refresh Data</button>
+          <button id="loadEarlierBtn">Load Earlier Flights</button>
         </div>
       </div>
 
@@ -397,330 +327,150 @@
         </table>
       </div>
     </div>
+    <!-- Skip Weather Section -->
 
-    <!-- Weather Section -->
-    <div id="weather-section" class="content-section">
-      <div class="weather-container">
-        <div class="weather-info">
-          <h3 class="weather-title">Current Weather at COK</h3>
-          <div class="weather-data" id="weather-data">
-            <div class="weather-item">
-              <span class="weather-label">Loading weather data...</span>
-              <span class="weather-value"></span>
-            </div>
-          </div>
-        </div>
-
-        <div class="runways-container">
-          <h3 class="runways-title">Runway Information</h3>
-          <div id="runways-data">
-            <div class="runway-item">Loading runway data...</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  </div> <!-- end of .app-container -->
 
   <button id="installButton" class="install-button">Install App</button>
 
   <script>
-    // API Configuration
     const API_BASE = "https://api.flightradar24.com/common/v1/airport.json";
-    const AIRPORT_CODE = "cok";
-    
-    // Construct API URLs
+    const AIRPORT_CODE = "COK";
+    const LOCAL_DELAY_KEY = "delayedFlights";
+    let earliestTimestamp = Math.floor(Date.now() / 1000);
+
     const getFlightEndpoint = (mode, timestamp) => {
-      return `${API_BASE}?code=${AIRPORT_CODE}&plugin-setting[schedule][mode]=${mode}&plugin-setting[schedule][timestamp]=${timestamp}&page=1&limit=100`;
-    };
-    
-    const getAirportInfoEndpoint = () => {
-      return `${API_BASE}?code=${AIRPORT_CODE}&plugin[]=details&plugin[]=runways&plugin[]=weather&plugin-setting[satelliteImage][scale]=1`;
+      return `${API_BASE}?code=${AIRPORT_CODE}&plugin[]=schedule&plugin-setting[schedule][mode]=${mode}&plugin-setting[schedule][timestamp]=${timestamp}&limit=100&page=-1`;
     };
 
-    // Utility Functions
-    const toLocalTime = (ts) => 
+    const toLocalTime = (ts) =>
       ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : "-";
-    
-    const toLocalDateTime = (ts) => 
-      ts ? new Date(ts * 1000).toLocaleString([], { 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        hour12: false 
-      }) : "-";
-    
+
     const classifyStatus = (estimated, scheduled) => {
       if (!estimated || !scheduled) return "status-green";
       const delay = estimated - scheduled;
       if (delay <= 0) return "status-green";
-      if (delay <= 900) return "status-orange"; // 15 minutes
+      if (delay <= 900) return "status-orange";
       return "status-red";
     };
 
     const getLogoURL = (flightNumber) => {
-      if (flightNumber.startsWith("IX")) {
-        return "https://cdn.brandfetch.io/idM6IAvrlf/w/820/h/248/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
-      } else if (flightNumber.startsWith("AI")) {
-        return "https://cdn.brandfetch.io/id-PSmaCm4/w/800/h/284/theme/light/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
-      } else if (flightNumber.startsWith("UL")) {
-        return "https://cdn.brandfetch.io/idZQkqhbVi/w/800/h/578/theme/dark/symbol.png?c=1dxbfHSJFAPEGdCLU4o5B";
-      } else if (flightNumber.startsWith("AK") || flightNumber.startsWith("FD")) {
-        return "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/AirAsia_New_Logo_%282020%29.svg/768px-AirAsia_New_Logo_%282020%29.svg.png";
-      } else if (flightNumber.startsWith("FZ")) {
-        return "https://cdn.brandfetch.io/idzRsGDSFE/w/800/h/162/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
-      } else if (flightNumber.startsWith("J9")) {
-        return "https://cdn.brandfetch.io/idRWbgTyu0/w/800/h/248/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
-      }
+      if (flightNumber.startsWith("IX")) return "https://cdn.brandfetch.io/idM6IAvrlf/w/820/h/248/theme/dark/logo.png";
+      if (flightNumber.startsWith("AI")) return "https://cdn.brandfetch.io/id-PSmaCm4/w/800/h/284/theme/light/logo.png";
+      if (flightNumber.startsWith("UL")) return "https://cdn.brandfetch.io/idZQkqhbVi/w/800/h/578/theme/dark/symbol.png";
+      if (["AK", "FD"].some(code => flightNumber.startsWith(code))) return "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/AirAsia_New_Logo_%282020%29.svg/768px-AirAsia_New_Logo_%282020%29.svg.png";
+      if (flightNumber.startsWith("FZ")) return "https://cdn.brandfetch.io/idzRsGDSFE/w/800/h/162/theme/dark/logo.png";
+      if (flightNumber.startsWith("J9")) return "https://cdn.brandfetch.io/idRWbgTyu0/w/800/h/248/theme/dark/logo.png";
       return "";
     };
 
-    // Flight Data Processing Functions
-    const filterAndSortFlights = (flights, type) => {
-      const filterValue = document.getElementById("airlineFilter").value;
-      const sortOption = document.getElementById("sortOption").value;
-      const timeWindowHours = parseInt(document.getElementById("timeWindow").value);
-      const now = Math.floor(Date.now() / 1000);
-      const oneHourInSeconds = 3600;
+    const saveDelayedFlight = (flight, type) => {
+      const key = `${type}-${flight.flight.identification.number.default}`;
+      let saved = JSON.parse(localStorage.getItem(LOCAL_DELAY_KEY) || "{}");
+      saved[key] = flight;
+      localStorage.setItem(LOCAL_DELAY_KEY, JSON.stringify(saved));
+    };
 
-      return flights.filter(f => {
-        const fn = f.flight?.identification?.number?.default || "";
-        const airlineCode = fn.substring(0, 2);
-        const est = type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival;
-        const sch = type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
-        const act = type === "departures" ? f.flight.time.actual?.departure : f.flight.time.actual?.arrival;
-
-        // Include flights in the next X hours based on user selection
-        const flightTime = sch || est || now;
-        const futureTimeWindow = now + (timeWindowHours * 60 * 60);
-        
-        // Filter by airline
-        let airlineMatch = false;
-        if (filterValue === "IX") {
-          airlineMatch = fn.startsWith("IX");
-        } else if (filterValue === "IXAI") {
-          airlineMatch = fn.startsWith("IX") || fn.startsWith("AI");
-        } else {
-          // AIX + OAL option with only specific airlines: UL, IX, FD, FZ, J9, AK
-          airlineMatch = fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
-        }
-        
-        // Check if flight is delayed (scheduled time is in the past but no actual time yet)
-        const isDelayed = sch && now > sch && !act && (!est || est > now);
-        
-        // Include flights that match criteria
-        if (airlineMatch) {
-          // Always show delayed flights until they depart/arrive
-          if (isDelayed) {
-            return true;
-          }
-          
-          // Flight hasn't departed/arrived yet and is within time window
-          if (!act && (est > now || sch > now) && flightTime <= futureTimeWindow) {
-            return true;
-          }
-          
-          // Flight completed within the last hour (keep for 1 hour after arrival/departure)
-          if (act && act > now - oneHourInSeconds) {
-            return true;
-          }
-        }
-        
-        return false;
-      }).sort((a, b) => {
-        const now = Math.floor(Date.now() / 1000);
-        
-        // Helper to get the time values for sorting
-        const getTimeValues = (f) => {
-          const isDep = type === "departures";
-          const est = isDep ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival;
-          const sch = isDep ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival;
-          const act = isDep ? f.flight.time.actual?.departure : f.flight.time.actual?.arrival;
-          
-          // A flight is delayed if its scheduled time is in the past, 
-          // it hasn't actually departed/arrived yet, and either has no estimated time 
-          // or the estimated time is in the future
-          const isDelayed = sch && now > sch && !act && (!est || est > now);
-          
-          const isComplete = act && act <= now;
-          
-          return { est, sch, act, isDelayed, isComplete };
-        };
-        
-        const aTime = getTimeValues(a);
-        const bTime = getTimeValues(b);
-        
-        // Always prioritize delayed flights at the top regardless of sort option
-        if (aTime.isDelayed && !bTime.isDelayed) return -1;
-        if (!aTime.isDelayed && bTime.isDelayed) return 1;
-        
-        // Then sort by the selected criteria
-        if (sortOption === "delayed") {
-          // For non-delayed flights, prioritize incomplete flights
-          if (!aTime.isComplete && bTime.isComplete) return -1;
-          if (aTime.isComplete && !bTime.isComplete) return 1;
-          
-          // Then by estimated time
-          return (aTime.est || aTime.sch || 0) - (bTime.est || bTime.sch || 0);
-        } 
-        else if (sortOption === "estimated") {
-          return (aTime.est || aTime.sch || 0) - (bTime.est || bTime.sch || 0);
-        } 
-        else {
-          return (aTime.sch || aTime.est || 0) - (bTime.sch || bTime.est || 0);
-        }
+    const loadSavedDelayedFlights = (type) => {
+      const saved = JSON.parse(localStorage.getItem(LOCAL_DELAY_KEY) || "{}");
+      return Object.values(saved).filter(f => {
+        const isDep = type === "departures";
+        const act = isDep ? f.flight.time.actual?.departure : f.flight.time.actual?.arrival;
+        return !act;
       });
     };
 
-    // Data Loading Functions
+    const clearOldDelayedFlights = () => {
+      const saved = JSON.parse(localStorage.getItem(LOCAL_DELAY_KEY) || "{}");
+      const updated = {};
+      for (const [key, f] of Object.entries(saved)) {
+        const isDep = key.startsWith("departures-");
+        const act = isDep ? f.flight.time.actual?.departure : f.flight.time.actual?.arrival;
+        if (!act) updated[key] = f;
+      }
+      localStorage.setItem(LOCAL_DELAY_KEY, JSON.stringify(updated));
+    };
+    const appendFlightsToTable = (flights, type) => {
+      const tbody = document.querySelector(`#${type}-table tbody`);
+      const now = Math.floor(Date.now() / 1000);
+      const existing = new Set();
+      tbody.querySelectorAll("tr").forEach(row => {
+        const fn = row.querySelector("td")?.innerText?.trim();
+        if (fn) existing.add(fn);
+      });
+
+      flights.forEach(f => {
+        const fl = f.flight;
+        const isDep = type === "departures";
+        const est = isDep ? fl.time.estimated?.departure : fl.time.estimated?.arrival;
+        const sch = isDep ? fl.time.scheduled?.departure : fl.time.scheduled?.arrival;
+        const act = isDep ? fl.time.actual?.departure : fl.time.actual?.arrival;
+        const fn = fl.identification.number?.default || "-";
+        const reg = fl.aircraft?.registration || "-";
+        const airportCode = isDep ? fl.airport.destination?.code?.iata : fl.airport.origin?.code?.iata || "-";
+        const model = fl.aircraft?.model?.text || "-";
+        const status = fl.status?.text || "-";
+        const logo = getLogoURL(fn);
+
+        const isDelayed = sch && now > sch && !act && (!est || est > now);
+        const isCompleted = act && act <= now;
+        if (isDelayed) saveDelayedFlight(f, type);
+        if (existing.has(fn)) return;
+
+        const row = document.createElement("tr");
+        if (isDelayed) row.classList.add("delayed-row");
+        else if (isCompleted) row.classList.add("completed-row");
+
+        row.innerHTML = `
+          <td><img class="flight-logo" src="${logo}" alt="logo"> ${fn}</td>
+          <td>${reg}</td>
+          <td>${airportCode}</td>
+          <td>${toLocalTime(est)}</td>
+          <td>${toLocalTime(sch)}</td>
+          <td>${model}</td>
+          <td class="${classifyStatus(est, sch)}">${status}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    };
+
     const loadFlights = async (type) => {
       try {
         const timestamp = Math.floor(Date.now() / 1000);
         const res = await fetch(getFlightEndpoint(type, timestamp));
         const data = await res.json();
-        
-        if (data.result?.response?.airport?.pluginData?.schedule?.[type]?.data) {
-          const flights = data.result.response.airport.pluginData.schedule[type].data;
-          const tbody = document.querySelector(`#${type}-table tbody`);
-          tbody.innerHTML = "";
+        const all = data?.result?.response?.airport?.pluginData?.schedule?.[type]?.data || [];
 
-          const filteredFlights = filterAndSortFlights(flights, type);
-          const now = Math.floor(Date.now() / 1000);
-          
-          if (filteredFlights.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7">No ${type} found matching the current criteria.</td></tr>`;
-            return;
-          }
-          
-          filteredFlights.forEach(f => {
-            const fl = f.flight;
-            const isDep = type === "departures";
-            const est = isDep ? fl.time.estimated?.departure : fl.time.estimated?.arrival;
-            const sch = isDep ? fl.time.scheduled?.departure : fl.time.scheduled?.arrival;
-            const act = isDep ? fl.time.actual?.departure : fl.time.actual?.arrival;
-            const fn = fl.identification.number?.default || "-";
-            const logo = getLogoURL(fn);
-            const reg = fl.aircraft?.registration || "-";
-            const airportCode = isDep ? fl.airport.destination?.code?.iata : fl.airport.origin?.code?.iata || "-";
-            const model = fl.aircraft?.model?.text || "-";
-            const status = fl.status?.text || "-";
-            
-            // Determine if flight is delayed or completed
-            const isDelayed = sch && now > sch && !act && (!est || est > now);
-            const isCompleted = act && act <= now;
-            
-            const row = document.createElement("tr");
-            if (isDelayed) {
-              row.classList.add("delayed-row");
-            } else if (isCompleted) {
-              row.classList.add("completed-row");
-            }
-            
-            row.innerHTML = `
-              <td><img class="flight-logo" src="${logo}" alt="logo"> ${fn}</td>
-              <td>${reg}</td>
-              <td>${airportCode}</td>
-              <td>${toLocalTime(est)}</td>
-              <td>${toLocalTime(sch)}</td>
-              <td>${model}</td>
-              <td class="${classifyStatus(est, sch)}">${status}</td>
-            `;
-            tbody.appendChild(row);
-          });
-          
-          // Update last refreshed time
-          document.getElementById("lastUpdated").textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-        } else {
-          throw new Error(`No valid ${type} data found in API response`);
-        }
-      } catch (err) {
-        console.error(`Error loading ${type}:`, err);
+        const savedDelayed = loadSavedDelayedFlights(type);
+        all.push(...savedDelayed);
+
         const tbody = document.querySelector(`#${type}-table tbody`);
-        tbody.innerHTML = `<tr><td colspan="7">Error loading ${type} data. Please try refreshing.</td></tr>`;
+        tbody.innerHTML = "";
+        appendFlightsToTable(all, type);
+
+        document.getElementById("lastUpdated").textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+      } catch (e) {
+        console.error(`Error loading ${type}:`, e);
       }
     };
 
-    const loadAirportInfo = async () => {
+    const loadEarlierFlights = async (type) => {
+      earliestTimestamp -= 2 * 3600;
       try {
-        const res = await fetch(getAirportInfoEndpoint());
+        const res = await fetch(getFlightEndpoint(type, earliestTimestamp));
         const data = await res.json();
-        
-        // Process Weather Data
-        if (data.result?.response?.airport?.pluginData?.weather) {
-          const weather = data.result.response.airport.pluginData.weather;
-          const weatherContainer = document.getElementById("weather-data");
-          weatherContainer.innerHTML = "";
-          
-          // Weather items to display
-          const weatherItems = [
-            { label: "Temperature", value: `${weather.temp?.celsius || "-"}°C` },
-            { label: "Condition", value: weather.condition?.text || "-" },
-            { label: "Wind", value: `${weather.wind?.speed?.kmh || "-"} km/h ${weather.wind?.direction?.text || ""}` },
-            { label: "Visibility", value: `${weather.visibility?.km || "-"} km` },
-            { label: "Humidity", value: `${weather.humidity || "-"}%` },
-            { label: "Pressure", value: `${weather.pressure?.hpa || "-"} hPa` },
-            { label: "Cloud Cover", value: `${weather.clouds?.coverage || "-"}%` },
-            { label: "Updated", value: toLocalTime(weather.time?.timestamp) },
-          ];
-          
-          weatherItems.forEach(item => {
-            const div = document.createElement("div");
-            div.className = "weather-item";
-            div.innerHTML = `
-              <span class="weather-label">${item.label}</span>
-              <span class="weather-value">${item.value}</span>
-            `;
-            weatherContainer.appendChild(div);
-          });
-        }
-        
-        // Process Runway Data
-        if (data.result?.response?.airport?.pluginData?.runways?.active) {
-          const runways = data.result.response.airport.pluginData.runways.active;
-          const runwaysContainer = document.getElementById("runways-data");
-          runwaysContainer.innerHTML = "";
-          
-          if (runways.length === 0) {
-            runwaysContainer.innerHTML = "<div class='runway-item'>No active runway data available</div>";
-          } else {
-            runways.forEach(runway => {
-              const div = document.createElement("div");
-              div.className = "runway-item";
-              div.innerHTML = `
-                <strong>Runway ${runway.name}</strong><br>
-                Length: ${runway.length?.m || "-"} m / ${runway.length?.ft || "-"} ft<br>
-                Surface: ${runway.surface || "-"}<br>
-                ${runway.active === true ? '<span class="status-green">Currently Active</span>' : ''}
-              `;
-              runwaysContainer.appendChild(div);
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Error loading airport info:", err);
-        document.getElementById("weather-data").innerHTML = "<div class='weather-item'>Error loading weather data. Please try refreshing.</div>";
-        document.getElementById("runways-data").innerHTML = "<div class='runway-item'>Error loading runway data. Please try refreshing.</div>";
+        const more = data?.result?.response?.airport?.pluginData?.schedule?.[type]?.data || [];
+        appendFlightsToTable(more, type);
+      } catch (e) {
+        console.error("Failed to load earlier flights", e);
       }
     };
 
     const refreshAllFlights = () => {
-      const flightTypeFilter = document.getElementById("flightTypeFilter").value;
-      
-      if (flightTypeFilter === "all" || flightTypeFilter === "arrivals") {
-        document.getElementById("arrivals-container").style.display = "block";
-        loadFlights("arrivals");
-      } else {
-        document.getElementById("arrivals-container").style.display = "none";
-      }
-      
-      if (flightTypeFilter === "all" || flightTypeFilter === "departures") {
-        document.getElementById("departures-container").style.display = "block";
-        loadFlights("departures");
-      } else {
-        document.getElementById("departures-container").style.display = "none";
-      }
+      const type = document.getElementById("flightTypeFilter").value;
+      if (type === "all" || type === "arrivals") loadFlights("arrivals");
+      if (type === "all" || type === "departures") loadFlights("departures");
     };
-
     // Theme Management
     const themeToggle = document.getElementById("themeToggle");
     const setTheme = (theme) => {
@@ -734,48 +484,37 @@
       setTheme(savedTheme);
     };
 
-    // Tab Management
-    const tabs = document.querySelectorAll('.tab');
-    const contentSections = document.querySelectorAll('.content-section');
-
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        // Deactivate all tabs and content sections
-        tabs.forEach(t => t.classList.remove('active'));
-        contentSections.forEach(cs => cs.classList.remove('active'));
-        
-        // Activate the clicked tab and its corresponding content
-        tab.classList.add('active');
-        const tabName = tab.getAttribute('data-tab');
-        document.getElementById(`${tabName}-section`).classList.add('active');
-        
-        // Load data for the weather tab if it's selected
-        if (tabName === 'weather') {
-          loadAirportInfo();
-        }
+    // Tabs
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".content-section").forEach(s => s.classList.remove("active"));
+        tab.classList.add("active");
+        const name = tab.getAttribute("data-tab");
+        document.getElementById(`${name}-section`).classList.add("active");
       });
     });
 
     // Event Listeners
     themeToggle.addEventListener("click", () => {
-      const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-      setTheme(currentTheme === "dark" ? "light" : "dark");
+      const current = document.documentElement.getAttribute("data-theme") || "light";
+      setTheme(current === "dark" ? "light" : "dark");
     });
 
     document.getElementById("airlineFilter").addEventListener("change", refreshAllFlights);
     document.getElementById("sortOption").addEventListener("change", refreshAllFlights);
     document.getElementById("timeWindow").addEventListener("change", refreshAllFlights);
     document.getElementById("flightTypeFilter").addEventListener("change", refreshAllFlights);
-    document.getElementById("refreshButton").addEventListener("click", () => {
-      refreshAllFlights();
-      if (document.querySelector('.tab.active').getAttribute('data-tab') === 'weather') {
-        loadAirportInfo();
-      }
+    document.getElementById("refreshButton").addEventListener("click", refreshAllFlights);
+    document.getElementById("loadEarlierBtn").addEventListener("click", () => {
+      const type = document.getElementById("flightTypeFilter").value;
+      if (type === "arrivals" || type === "all") loadEarlierFlights("arrivals");
+      if (type === "departures" || type === "all") loadEarlierFlights("departures");
     });
 
     // PWA Installation Support
     let deferredPrompt;
-    const installButton = document.getElementById('installButton');
+    const installButton = document.getElementById("installButton");
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -794,16 +533,10 @@
       });
     });
 
-    // Initialize App
+    // Start App
     initializeTheme();
     refreshAllFlights();
-    
-    // Auto-refresh every 30 seconds
     setInterval(refreshAllFlights, 30000);
   </script>
-
-  <script>
-    // Service Worker Registration for PWA support
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service
+</body>
+</html>
