@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <link rel="manifest" href="manifest.json">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIX SEC OPS</title>
   <style>
@@ -574,5 +575,19 @@
     refreshAllFlights();
     setInterval(() => refreshAllFlights(), 30000);
   </script>
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(function(registration) {
+          console.log('ServiceWorker registered with scope:', registration.scope);
+        })
+        .catch(function(error) {
+          console.log('ServiceWorker registration failed:', error);
+        });
+    });
+  }
+</script>
+
 </body>
 </html>
