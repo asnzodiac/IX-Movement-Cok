@@ -7,7 +7,6 @@ app = Flask(__name__)
 CORS(app)
 
 FR24_URL = "https://data-live.flightradar24.com/zones/fcgi/feed.js"
-ALLOWED_PREFIXES = ("IX", "AI", "AK", "FD", "FZ", "UL", "J9")
 
 @app.route("/")
 def home():
@@ -28,8 +27,11 @@ def get_flights():
             if not isinstance(v, dict):
                 continue
             flight_no = v.get("flight", "")
-            if not flight_no or not flight_no.startswith(ALLOWED_PREFIXES):
+            if not flight_no:
                 continue
+            # Prefix filter disabled for testing:
+            # if not flight_no.startswith(ALLOWED_PREFIXES):
+            #     continue
             flights.append({
                 "flight": flight_no,
                 "reg": v.get("reg", ""),
