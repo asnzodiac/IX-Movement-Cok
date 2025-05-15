@@ -124,7 +124,7 @@
           <th>STA</th>
           <th>A/C</th>
           <th>Status</th>
-          <th>Follow</th>
+        
         </tr>
       </thead>
       <tbody>
@@ -311,7 +311,7 @@
         return false;
       }).sort((a, b) => {
         const getTime = (f) =>
-          sortOption === "scheduled"
+          sortOption === "estimated"
             ? (type === "departures" ? f.flight.time.estimated?.departure : f.flight.time.estimated?.arrival) || 0
             : (type === "departures" ? f.flight.time.scheduled?.departure : f.flight.time.scheduled?.arrival) || 0;
         return getTime(a) - getTime(b);
