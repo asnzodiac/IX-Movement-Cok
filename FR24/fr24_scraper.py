@@ -9,19 +9,26 @@ CORS(app)
 FR24_URL = "https://data-live.flightradar24.com/zones/fcgi/feed.js"
 ALLOWED_PREFIXES = ("IX", "AI", "AK", "FD", "FZ", "UL", "J9")
 
+@app.route("/")
+def home():
+    return "✅ Flight Tracker backend is running!"
+
 @app.route("/flights")
 def get_flights():
     try:
         airport = request.args.get("airport", "COK")
         mode = request.args.get("type", "arrivals")
-        res = requests.get(FR24_URL, params={"airport": airport, mode: 1}, headers={"User-Agent": "Mozilla/5.0"})
+        res = requests.get(FR24_URL, params={
+            "airport": airport,
+            mode: 1
+        }, headers={"User-Agent": "Mozilla/5.0"})
         data = res.json()
         flights = []
         for k, v in data.items():
             if not isinstance(v, dict):
                 continue
             flight_no = v.get("flight", "")
-            if not flight_no.startswith(ALLOWED_PREFIXES):
+            if not flight_no or not flight_no.startswith(ALLOWED_PREFIXES):
                 continue
             flights.append({
                 "flight": flight_no,
