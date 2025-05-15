@@ -2,118 +2,353 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>COK Flight Tracker</title>
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    h1 { color: #0066cc; }
+    .tabs { margin-bottom: 10px; }
+    .tab {
+      display: inline-block;
+      padding: 8px 20px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      border-bottom: none;
+      background-color: #eee;
+      margin-right: 5px;
+      border-radius: 4px 4px 0 0;
+    }
+    .tab.active {
+      background-color: #0066cc;
+      color: white;
+      font-weight: bold;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 0; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: center; }
+    select, input[type="text"], button {
+      padding: 6px 8px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    #controls {
+      margin-bottom: 10px;
+    }
+  </style>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js');
     }
   </script>
-  <style>
-    body { font-family: Arial; padding: 20px; }
-    h1 { color: #0066cc; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { padding: 8px; border: 1px solid #ccc; text-align: center; }
-    select { padding: 5px; margin-bottom: 10px; }
-  </style>
 </head>
 <body>
   <h1>COK Flight Tracker</h1>
 
-  <label for="airlineFilter">Filter by Airline:</label>
-  <select id="airlineFilter">
-    <option value="all">All</option>
-    <option value="ix">IX Only</option>
-    <option value="ixai">IX + AI</option>
-  </select>
+  <div class="tabs">
+    <div id="tab-arrivals" class="tab active">Arrivals</div>
+    <div id="tab-departures" class="tab">Departures</div>
+  </div>
 
-  <table>
+  <div id="controls">
+    <label for="airlineFilter">Filter by Airline:</label>
+    <select id="airlineFilter">
+      <option value="all">All</option>
+      <option value="ix">IX Only</option>
+      <option value="ixai">IX + AI</option>
+    </select>
+
+    <label for="searchInput">Search:</label>
+    <input type="text" id="searchInput" placeholder="Flight number or From/To..." />
+
+    <label for="sortSelect">Sort by:</label>
+    <select id="sortSelect">
+      <option value="eta_asc">ETA/ETD Asc</option>
+      <option value="eta_desc">ETA/ETD Desc</option>
+      <option value="flight_asc">Flight # Asc</option>
+      <option value="flight_desc">Flight # Desc</option>
+      <option value="status_asc">Status Asc</option>
+      <option value="status_desc">Status Desc</option>
+    </select>
+
+    <button id="loadEarlierBtn">Load Earlier Flights (4 hrs)</button>
+  </div>
+
+  <!-- Arrivals Table -->
+  <table id="arrivalsTable">
     <thead>
       <tr>
         <th>Flight</th>
         <th>From</th>
         <th>ETA</th>
+        <th>STA</th>
+        <th>Reg</th>
+        <th>Aircraft</th>
         <th>Status</th>
         <th>Follow</th>
       </tr>
     </thead>
-    <tbody id="flightTable">
-      <tr><td colspan="5">Loading...</td></tr>
+    <tbody id="arrivalsBody">
+      <tr><td colspan="8">Loading arrivals...</td></tr>
     </tbody>
   </table>
 
-  <script>
-    const API_BASE = 'https://kittu-0wb2.onrender.com';
-    let followedFlights = JSON.parse(localStorage.getItem('followedFlights') || '[]');
+  <!-- Departures Table -->
+  <table id="departuresTable" style="display:none;">
+    <thead>
+      <tr>
+        <th>Flight</th>
+        <th>To</th>
+        <th>ETD</th>
+        <th>STD</th>
+        <th>Reg</th>
+        <th>Aircraft</th>
+        <th>Status</th>
+        <th>Follow</th>
+      </tr>
+    </thead>
+    <tbody id="departuresBody">
+      <tr><td colspan="8">Loading departures...</td></tr>
+    </tbody>
+  </table>
 
-    async function fetchFlights() {
-      const res = await fetch(`${API_BASE}/flights?airport=COK&type=arrivals`);
+<script>
+  const API_BASE = 'https://kittu-0wb2.onrender.com';
+  let followedFlights = JSON.parse(localStorage.getItem('followedFlights') || '[]');
+  let currentTab = 'arrivals';
+
+  // Keep track of earliest timestamps loaded per tab for loading earlier flights
+  let earliestTimestamp = {
+    arrivals: Math.floor(Date.now() / 1000),
+    departures: Math.floor(Date.now() / 1000),
+  };
+
+  // Store all loaded flights for filtering/search/sort without refetching
+  let loadedFlights = {
+    arrivals: [],
+    departures: []
+  };
+
+  // Tab switching handlers
+  document.getElementById('tab-arrivals').addEventListener('click', () => {
+    switchTab('arrivals');
+  });
+  document.getElementById('tab-departures').addEventListener('click', () => {
+    switchTab('departures');
+  });
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('arrivalsTable').style.display = tab === 'arrivals' ? '' : 'none';
+    document.getElementById('departuresTable').style.display = tab === 'departures' ? '' : 'none';
+    document.getElementById('tab-arrivals').classList.toggle('active', tab === 'arrivals');
+    document.getElementById('tab-departures').classList.toggle('active', tab === 'departures');
+    renderTable();
+  }
+
+  // Controls listeners
+  document.getElementById('airlineFilter').addEventListener('change', renderTable);
+  document.getElementById('searchInput').addEventListener('input', renderTable);
+  document.getElementById('sortSelect').addEventListener('change', renderTable);
+
+  // Load Earlier Flights button
+  document.getElementById('loadEarlierBtn').addEventListener('click', async () => {
+    const earliest = earliestTimestamp[currentTab];
+    const fourHoursEarlier = earliest - 4 * 3600;
+    if(fourHoursEarlier <= 0) {
+      alert('No earlier flights available.');
+      return;
+    }
+    await fetchFlights(currentTab, fourHoursEarlier, true);
+  });
+
+  async function fetchFlights(type, timestamp = Math.floor(Date.now() / 1000), append = false) {
+    try {
+      const url = new URL(`${API_BASE}/flights`);
+      url.searchParams.set('airport', 'COK');
+      url.searchParams.set('type', type);
+      url.searchParams.set('timestamp', timestamp);
+      const res = await fetch(url.toString());
       const data = await res.json();
-      updateTable(data);
-    }
-
-    function updateTable(flights) {
-      const table = document.getElementById('flightTable');
-      table.innerHTML = '';
-      const filter = document.getElementById('airlineFilter').value;
-
-      const filtered = flights.filter(f => {
-        const prefix = f.flight.slice(0, 2);
-        if (filter === 'ix') return prefix === 'IX';
-        if (filter === 'ixai') return ['IX', 'AI'].includes(prefix);
-        return ['IX', 'AK', 'FD', 'FZ', 'UL', 'J9'].includes(prefix);
-      });
-
-      const now = Date.now() / 1000;
-
-      if (filtered.length === 0) {
-        table.innerHTML = `<tr><td colspan="5">No flights found.</td></tr>`;
-        return;
-      }
-
-      filtered.forEach(f => {
-        const etaTime = f.eta ? new Date(f.eta * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : "-";
-        const etaMins = f.eta ? Math.round((f.eta - now) / 60) : null;
-
-        if (followedFlights.includes(f.flight) && etaMins <= 15 && etaMins > 0) {
-          notifyFlight(f);
-        }
-
-        const row = `<tr>
-          <td>${f.flight}</td>
-          <td>${f.from}</td>
-          <td>${etaTime}</td>
-          <td>${f.status}</td>
-          <td><input type="checkbox" ${followedFlights.includes(f.flight) ? 'checked' : ''} onchange="toggleFollow('${f.flight}', this.checked)"></td>
-        </tr>`;
-        table.innerHTML += row;
-      });
-    }
-
-    function toggleFollow(flight, checked) {
-      if (checked) followedFlights.push(flight);
-      else followedFlights = followedFlights.filter(f => f !== flight);
-      localStorage.setItem('followedFlights', JSON.stringify(followedFlights));
-    }
-
-    function notifyFlight(flight) {
-      if (Notification.permission === 'granted') {
-        navigator.serviceWorker.getRegistration().then(reg => {
-          if (reg) {
-            reg.showNotification(`Flight ${flight.flight}`, {
-              body: `ETA in ${Math.round((flight.eta - Date.now() / 1000) / 60)} minutes`,
-              icon: 'icon-192.png'
-            });
-          }
+      if(append) {
+        // Avoid duplicates
+        const existingFlights = loadedFlights[type].map(f => f.flight);
+        data.forEach(f => {
+          if(!existingFlights.includes(f.flight)) loadedFlights[type].push(f);
         });
+      } else {
+        loadedFlights[type] = data;
       }
+      // Update earliest timestamp seen
+      if(data.length > 0) {
+        const minTimestamp = Math.min(...data.map(f => f.std || f.eta || timestamp));
+        earliestTimestamp[type] = Math.min(earliestTimestamp[type], minTimestamp);
+      }
+      renderTable();
+    } catch(e) {
+      console.error('Fetch flights error:', e);
+      alert('Failed to load flights. Check console.');
+    }
+  }
+
+  function renderTable() {
+    if(currentTab === 'arrivals') renderArrivals();
+    else renderDepartures();
+  }
+
+  function renderArrivals() {
+    const tbody = document.getElementById('arrivalsBody');
+    tbody.innerHTML = '';
+    let flights = [...loadedFlights.arrivals];
+    const filter = document.getElementById('airlineFilter').value.toLowerCase();
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const sort = document.getElementById('sortSelect').value;
+
+    const now = Date.now() / 1000;
+
+    // Filter by airline prefix
+    flights = flights.filter(f => {
+      const prefix = f.flight.slice(0, 2).toLowerCase();
+      if(filter === 'ix') return prefix === 'ix';
+      if(filter === 'ixai') return prefix === 'ix' || prefix === 'ai';
+      return ['ix','ak','fd','fz','ul','j9'].includes(prefix);
+    });
+
+    // Filter by search input
+    flights = flights.filter(f =>
+      f.flight.toLowerCase().includes(search) ||
+      (f.from && f.from.toLowerCase().includes(search))
+    );
+
+    // Sort
+    flights.sort((a,b) => {
+      switch(sort) {
+        case 'eta_asc': return (a.eta||0) - (b.eta||0);
+        case 'eta_desc': return (b.eta||0) - (a.eta||0);
+        case 'flight_asc': return a.flight.localeCompare(b.flight);
+        case 'flight_desc': return b.flight.localeCompare(a.flight);
+        case 'status_asc': return (a.status||'').localeCompare(b.status||'');
+        case 'status_desc': return (b.status||'').localeCompare(a.status||'');
+      }
+    });
+
+    if(flights.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8">No arrivals found.</td></tr>';
+      return;
     }
 
-    document.getElementById('airlineFilter').addEventListener('change', fetchFlights);
-    if (Notification.permission !== 'granted') Notification.requestPermission();
-    fetchFlights();
-    setInterval(fetchFlights, 30000);
-  </script>
+    flights.forEach(f => {
+      const etaTime = f.eta ? new Date(f.eta * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : '-';
+      const staTime = f.std ? new Date(f.std * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : '-';
+      const etaMins = f.eta ? Math.round((f.eta - now)/60) : null;
+
+      if(followedFlights.includes(f.flight) && etaMins !== null && etaMins <= 15 && etaMins > 0) notifyFlight(f);
+
+      tbody.innerHTML += `<tr>
+        <td>${f.flight}</td>
+        <td>${f.from || '-'}</td>
+        <td>${etaTime}</td>
+        <td>${staTime}</td>
+        <td>${f.reg || '-'}</td>
+        <td>${f.aircraft || '-'}</td>
+        <td>${f.status || '-'}</td>
+        <td><input type="checkbox" ${followedFlights.includes(f.flight) ? 'checked' : ''} onchange="toggleFollow('${f.flight}', this.checked)"></td>
+      </tr>`;
+    });
+  }
+
+  function renderDepartures() {
+    const tbody = document.getElementById('departuresBody');
+    tbody.innerHTML = '';
+    let flights = [...loadedFlights.departures];
+    const filter = document.getElementById('airlineFilter').value.toLowerCase();
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const sort = document.getElementById('sortSelect').value;
+
+    const now = Date.now() / 1000;
+
+    flights = flights.filter(f => {
+      const prefix = f.flight.slice(0, 2).toLowerCase();
+      if(filter === 'ix') return prefix === 'ix';
+      if(filter === 'ixai') return prefix === 'ix' || prefix === 'ai';
+      return ['ix','ak','fd','fz','ul','j9'].includes(prefix);
+    });
+
+    flights = flights.filter(f =>
+      f.flight.toLowerCase().includes(search) ||
+      (f.to && f.to.toLowerCase().includes(search))
+    );
+
+    flights.sort((a,b) => {
+      switch(sort) {
+        case 'eta_asc': return (a.eta||0) - (b.eta||0);
+        case 'eta_desc': return (b.eta||0) - (a.eta||0);
+        case 'flight_asc': return a.flight.localeCompare(b.flight);
+        case 'flight_desc': return b.flight.localeCompare(a.flight);
+        case 'status_asc': return (a.status||'').localeCompare(b.status||'');
+        case 'status_desc': return (b.status||'').localeCompare(a.status||'');
+      }
+    });
+
+    if(flights.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8">No departures found.</td></tr>';
+      return;
+    }
+
+    flights.forEach(f => {
+      const etdTime = f.eta ? new Date(f.eta * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : '-';
+      const stdTime = f.std ? new Date(f.std * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}) : '-';
+      const etdMins = f.eta ? Math.round((f.eta - now)/60) : null;
+
+      if(followedFlights.includes(f.flight) && etdMins !== null && etdMins <= 15 && etdMins > 0) notifyFlight(f);
+
+      tbody.innerHTML += `<tr>
+        <td>${f.flight}</td>
+        <td>${f.to || '-'}</td>
+        <td>${etdTime}</td>
+        <td>${stdTime}</td>
+        <td>${f.reg || '-'}</td>
+        <td>${f.aircraft || '-'}</td>
+        <td>${f.status || '-'}</td>
+        <td><input type="checkbox" ${followedFlights.includes(f.flight) ? 'checked' : ''} onchange="toggleFollow('${f.flight}', this.checked)"></td>
+      </tr>`;
+    });
+  }
+
+  function toggleFollow(flight, checked) {
+    if (checked) {
+      if (!followedFlights.includes(flight)) followedFlights.push(flight);
+    } else {
+      followedFlights = followedFlights.filter(f => f !== flight);
+    }
+    localStorage.setItem('followedFlights', JSON.stringify(followedFlights));
+  }
+
+  function notifyFlight(flight) {
+    if (Notification.permission === 'granted') {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg) {
+          reg.showNotification(`Flight ${flight.flight}`, {
+            body: `ETA/ETD in ${Math.round((flight.eta - Date.now()/1000)/60)} minutes`,
+            icon: 'icon-192.png'
+          });
+        }
+      });
+    }
+  }
+
+  // Request notification permission at start
+  if(Notification.permission !== 'granted') Notification.requestPermission();
+
+  // Initial load
+  fetchFlights('arrivals');
+  fetchFlights('departures');
+  setInterval(() => {
+    fetchFlights('arrivals');
+    fetchFlights('departures');
+  }, 30000);
+</script>
 </body>
 </html>
