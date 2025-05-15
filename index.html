@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flight Tracker</title>
+  <title>AIX SEC OPS - Aswin COK</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192.png" />
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -69,7 +71,7 @@
 </head>
 <body>
   <header>
-    <h1>Flight Tracker</h1>
+    <h1>AIX SEC OPS - Aswin COK</h1>
     <button id="themeToggle">Toggle Dark Mode</button>
   </header>
 
@@ -77,9 +79,9 @@
     <label for="airportSelect">Airport: </label>
     <select id="airportSelect">
       <option value="COK">Cochin (COK)</option>
-      <option value="CCJ">Calicut (CCJ)</option>
-      <option value="CNN">Kannur (CNN)</option>
-      <option value="TRV">Trivandrum (TRV)</option>
+      <option value="BOM">Mumbai (BOM)</option>
+      <option value="DEL">Delhi (DEL)</option>
+      <option value="BLR">Bangalore (BLR)</option>
     </select>
     <label for="timeRangeSelect">Time Range: </label>
     <select id="timeRangeSelect">
@@ -89,7 +91,7 @@
       <option value="48">48 Hours Ahead</option>
     </select>
     <button id="refreshButton">Refresh Data</button>
-    <button id="pastHourButton">Load Earlier Flights</button>
+    <button id="pastHourButton">Show Past 1 Hour</button>
   </div>
 
   <div class="tabs">
@@ -264,7 +266,9 @@
         const unfollowButton = document.createElement("button");
         unfollowButton.textContent = "Unfollow";
         unfollowButton.onclick = () => {
-          const updatedFlights = getFollowedFlights().filter((f) => f.flightNumber !== flight.flightNumber || f.type !== flight.type || f.airport !== flight.airport);
+          const updatedFlights = getFollowedFlights().filter(
+            (f) => f.flightNumber !== flight.flightNumber || f.type !== flight.type || f.airport !== flight.airport
+          );
           saveFollowedFlights(updatedFlights);
           updateFollowedFlightsList();
           refreshAllFlights();
@@ -316,23 +320,25 @@
 
     const loadFlights = async (type, tableId, airlineFilterId, sortOptionId, includePast = false) => {
       const tbody = document.querySelector(`#${tableId} tbody`);
-      tbody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
+      const bufferTbody = document.createElement("tbody");
+      bufferTbody.style.display = "none";
 
       try {
         const res = await fetch(getEndpoint(type));
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         const flights = data.result?.response?.airport?.pluginData?.schedule?.[type]?.data || [];
-        
-        tbody.innerHTML = "";
+
         if (flights.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='8'>No flights available</td></tr>";
+          bufferTbody.innerHTML = "<tr><td colspan='8'>No flights available</td></tr>";
+          tbody.innerHTML = bufferTbody.innerHTML;
           return;
         }
 
         const filteredFlights = filterAndSortFlights(flights, type, airlineFilterId, sortOptionId, includePast);
         if (filteredFlights.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='8'>No flights match the selected filters</td></tr>";
+          bufferTbody.innerHTML = "<tr><td colspan='8'>No flights match the selected filters</td></tr>";
+          tbody.innerHTML = bufferTbody.innerHTML;
           return;
         }
 
@@ -347,7 +353,7 @@
           const logo = getLogoURL(fn);
           const reg = fl.aircraft?.registration || "-";
           const airport = isDep ? fl.airport.destination?.code?.iata : fl.airport.origin?.code?.iata || "-";
-          const model = fl.aircraft?.model?.code || "-"; // Use concise model code
+          const model = fl.aircraft?.model?.code || "-";
           const status = fl.status?.text || "-";
           const isFollowed = followedFlights.some(
             (f) => f.flightNumber === fn && f.type === type && f.airport === airportCode
@@ -364,8 +370,11 @@
             <td class="${classifyStatus(est, sch)}">${status}</td>
             <td><button class="follow-button" data-flight="${fn}" data-type="${type}" data-airport="${airportCode}">${isFollowed ? "Unfollow" : "Follow"}</button></td>
           `;
-          tbody.appendChild(row);
+          bufferTbody.appendChild(row);
         });
+
+        // Replace table content only after buffer is ready
+        tbody.innerHTML = bufferTbody.innerHTML;
 
         // Add follow/unfollow event listeners
         document.querySelectorAll(`#${tableId} .follow-button`).forEach((button) => {
@@ -405,7 +414,8 @@
 
     const loadTurnaround = async () => {
       const tbody = document.querySelector("#turnaround-table tbody");
-      tbody.innerHTML = "<tr><td colspan='8'>Loading...</td></tr>";
+      const bufferTbody = document.createElement("tbody");
+      bufferTbody.style.display = "none";
 
       try {
         const [arrRes, depRes] = await Promise.all([fetch(getEndpoint("arrivals")), fetch(getEndpoint("departures"))]);
@@ -416,9 +426,9 @@
         const arrivals = arrData.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
         const departures = depData.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
 
-        tbody.innerHTML = "";
         if (arrivals.length === 0 || departures.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='8'>No turnaround flights available</td></tr>";
+          bufferTbody.innerHTML = "<tr><td colspan='8'>No turnaround flights available</td></tr>";
+          tbody.innerHTML = bufferTbody.innerHTML;
           return;
         }
 
@@ -451,7 +461,8 @@
         ).map((arr) => turnarounds.find((t) => t.arrival === arr.flight));
 
         if (filteredTurnarounds.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='8'>No turnaround flights match the selected filters</td></tr>";
+          bufferTbody.innerHTML = "<tr><td colspan='8'>No turnaround flights match the selected filters</td></tr>";
+          tbody.innerHTML = bufferTbody.innerHTML;
           return;
         }
 
@@ -467,7 +478,7 @@
           const arrAirport = arr.airport.origin?.code?.iata || "-";
           const depAirport = dep.airport.destination?.code?.iata || "-";
           const sector = `${arrAirport} - ${airportCode} - ${depAirport}`;
-          const model = arr.aircraft?.model?.code || "-"; // Use concise model code
+          const model = arr.aircraft?.model?.code || "-";
           const arrStatus = arr.status?.text || "-";
           const arrEst = arr.time.estimated?.arrival;
           const arrSch = arr.time.scheduled?.arrival;
@@ -487,8 +498,11 @@
             <td class="${classifyStatus(arrEst, arrSch)}">${arrStatus}</td>
             <td><button class="follow-button" data-flight="${arrFn}" data-type="turnaround" data-airport="${airportCode}">${isFollowed ? "Unfollow" : "Follow"}</button></td>
           `;
-          tbody.appendChild(row);
+          bufferTbody.appendChild(row);
         });
+
+        // Replace table content only after buffer is ready
+        tbody.innerHTML = bufferTbody.innerHTML;
 
         // Add follow/unfollow event listeners for turnaround
         document.querySelectorAll("#turnaround-table .follow-button").forEach((button) => {
@@ -569,6 +583,15 @@
         document.getElementById(tab.dataset.tab).classList.add("active");
       });
     });
+
+    // Register service worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").catch((err) => {
+          console.error("Service Worker registration failed:", err);
+        });
+      });
+    }
 
     initializeTheme();
     refreshAllFlights();
