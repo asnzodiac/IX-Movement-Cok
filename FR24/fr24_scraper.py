@@ -1,12 +1,12 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
+import os
 
 app = Flask(__name__)
 CORS(app)
 
 FR24_URL = "https://data-live.flightradar24.com/zones/fcgi/feed.js"
-
 ALLOWED_PREFIXES = ("IX", "AI", "AK", "FD", "FZ", "UL", "J9")
 
 @app.route("/flights")
@@ -34,3 +34,7 @@ def get_flights():
         return jsonify(flights)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
