@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flight Tracker</title>
+  <title>AIX SEC OPS</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -69,17 +69,17 @@
 </head>
 <body>
   <header>
-    <h1>Flight Tracker</h1>
-    <button id="themeToggle">Toggle Dark Mode</button>
+    <h1>AIX SEC OPS</h1>
+    <button id="themeToggle">Dark Mode</button>
   </header>
 
   <div>
     <label for="airportSelect">Airport: </label>
     <select id="airportSelect">
       <option value="COK">Cochin (COK)</option>
-      <option value="BOM">Mumbai (BOM)</option>
-      <option value="DEL">Delhi (DEL)</option>
-      <option value="BLR">Bangalore (BLR)</option>
+      <option value="CCJ">Calicut (CCJ)</option>
+      <option value="CNN">Kannur (CNN)</option>
+      <option value="TRV">Trivandrum (TRV)</option>
     </select>
     <label for="timeRangeSelect">Time Range: </label>
     <select id="timeRangeSelect">
@@ -536,7 +536,7 @@
     const themeToggle = document.getElementById("themeToggle");
     const setTheme = (theme) => {
       document.documentElement.setAttribute("data-theme", theme);
-      themeToggle.textContent = theme === "dark" ? "Toggle Light Mode" : "Toggle Dark Mode";
+      themeToggle.textContent = theme === "dark" ? "Light Mode" : "Dark Mode";
       localStorage.setItem("theme", theme);
     };
 
