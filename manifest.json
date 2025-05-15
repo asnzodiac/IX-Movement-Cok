@@ -2,7 +2,7 @@
   "name": "AIX SEC OPS - Aswin COK",
   "short_name": "AIX SEC OPS",
   "start_url": "./index.html",
-  "display": "fullscreen",
+  "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
   "orientation": "portrait",
