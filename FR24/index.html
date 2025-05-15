@@ -1,0 +1,97 @@
+<!-- index.html updated to fetch from backend and trigger desktop notifications -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="manifest.json">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+  <title>COK Flight Tracker</title>
+</head>
+<body>
+  <h1>Flight Tracker</h1>
+  <select id="airlineFilter">
+    <option value="all">All</option>
+    <option value="ix">IX Only</option>
+    <option value="ixai">IX + AI</option>
+  </select>
+  <table border="1">
+    <thead>
+      <tr><th>Flight</th><th>From</th><th>ETA</th><th>Status</th><th>Follow</th></tr>
+    </thead>
+    <tbody id="flightTable"></tbody>
+  </table>
+  <script>
+    const API_BASE = 'https://aix-ops.onrender.com';
+    let followedFlights = JSON.parse(localStorage.getItem('followedFlights') || '[]');
+
+    async function fetchFlights() {
+      const res = await fetch(`${API_BASE}/flights?airport=COK&type=arrivals`);
+      const data = await res.json();
+      updateTable(data);
+    }
+
+    function updateTable(flights) {
+      const table = document.getElementById('flightTable');
+      table.innerHTML = '';
+      const filter = document.getElementById('airlineFilter').value;
+
+      const filtered = flights.filter(f => {
+        const prefix = f.flight.slice(0, 2);
+        if (filter === 'ix') return prefix === 'IX';
+        if (filter === 'ixai') return ['IX', 'AI'].includes(prefix);
+        return ['IX', 'AK', 'FD', 'FZ', 'UL', 'J9'].includes(prefix);
+      });
+
+      const now = Date.now() / 1000;
+
+      filtered.forEach(f => {
+        const etaMins = Math.round((f.eta - now) / 60);
+        if (followedFlights.includes(f.flight) && etaMins <= 15 && etaMins > 0) {
+          notifyFlight(f);
+        }
+        const row = `<tr>
+          <td>${f.flight}</td>
+          <td>${f.from}</td>
+          <td>${new Date(f.eta * 1000).toLocaleTimeString()}</td>
+          <td>${f.status}</td>
+          <td><input type="checkbox" ${followedFlights.includes(f.flight) ? 'checked' : ''} onchange="toggleFollow('${f.flight}', this.checked)"></td>
+        </tr>`;
+        table.innerHTML += row;
+      });
+    }
+
+    function toggleFollow(flight, checked) {
+      if (checked) followedFlights.push(flight);
+      else followedFlights = followedFlights.filter(f => f !== flight);
+      localStorage.setItem('followedFlights', JSON.stringify(followedFlights));
+    }
+
+    function notifyFlight(flight) {
+      if (Notification.permission === 'granted') {
+        navigator.serviceWorker.getRegistration().then(reg => {
+          if (reg) {
+            reg.showNotification(`Flight ${flight.flight}`, {
+              body: `ETA in ${Math.round((flight.eta - Date.now() / 1000) / 60)} minutes`,
+              icon: 'icon-192.png'
+            });
+          }
+        });
+      }
+    }
+
+    document.getElementById('airlineFilter').addEventListener('change', fetchFlights);
+
+    if (Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+
+    fetchFlights();
+    setInterval(fetchFlights, 30000);
+  </script>
+</body>
+</html>
