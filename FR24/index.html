@@ -67,7 +67,7 @@
       const prefix = flight.flight.slice(0, 2);
       if (filter === "ix") return prefix === "IX";
       if (filter === "ixai") return ["IX", "AI"].includes(prefix);
-      return ["IX", "AI", "UL", "AK", "FD", "FZ", "J9"].includes(prefix);
+      return ["IX", "UL", "AK", "FD", "FZ", "J9"].includes(prefix);
     };
 
     const renderTable = (flights, tableId, type) => {
