@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
 import requests
 import json
@@ -9,28 +9,25 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
-# Load token from config.json
+# Load token
 with open("config.json") as f:
     CONFIG = json.load(f)
 
-TOKEN = CONFIG.get("token")
+TOKEN = CONFIG["token"]
 BASE_URL = "https://api.flightradar24.com/common/v1/airport.json"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-STORAGE_FILE = "storage.json"
+# Persistent storage for bay and belt
+STORAGE_FILE = "bay_belt_store.json"
+if os.path.exists(STORAGE_FILE):
+    with open(STORAGE_FILE, "r") as f:
+        BAY_BELT_STORE = json.load(f)
+else:
+    BAY_BELT_STORE = {}
 
-# Ensure persistent bay/belt store exists
-if not os.path.exists(STORAGE_FILE):
+def save_storage():
     with open(STORAGE_FILE, "w") as f:
-        json.dump({}, f)
-
-def load_storage():
-    with open(STORAGE_FILE) as f:
-        return json.load(f)
-
-def save_storage(data):
-    with open(STORAGE_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+        json.dump(BAY_BELT_STORE, f)
 
 def build_url(mode: str, timestamp: int) -> str:
     return (
@@ -43,18 +40,20 @@ def build_url(mode: str, timestamp: int) -> str:
         f"&token={TOKEN}"
     )
 
+def get_today_key(flight_no, date):
+    return f"{flight_no}_{date}"
+
 @app.route("/flights")
 def get_flights():
     try:
         mode = request.args.get("mode", "arrivals")
         timestamp = request.args.get("ts")
         ts = int(timestamp) if timestamp else int(time.time())
-        url = build_url(mode, ts)
-        res = requests.get(url, headers=HEADERS)
+
+        res = requests.get(build_url(mode, ts), headers=HEADERS)
         res.raise_for_status()
         data = res.json()
-
-        flight_data = (
+        flights_raw = (
             data.get("result", {})
             .get("response", {})
             .get("airport", {})
@@ -64,34 +63,26 @@ def get_flights():
             .get("data", [])
         )
 
-        storage = load_storage()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-
+        today = datetime.utcnow().strftime("%Y-%m-%d")
         flights = []
-        for f in flight_data:
+        for f in flights_raw:
             fl = f.get("flight", {})
-            fn = fl.get("identification", {}).get("number", {}).get("default", "")
+            flight_no = fl.get("identification", {}).get("number", {}).get("default", "")
             reg = fl.get("aircraft", {}).get("registration", "")
-            from_airport = fl.get("airport", {}).get("origin", {}).get("code", {}).get("iata", "")
-            to_airport = fl.get("airport", {}).get("destination", {}).get("code", {}).get("iata", "")
-            eta = fl.get("time", {}).get("estimated", {}).get("arrival" if mode == "arrivals" else "departure", 0)
-            std = fl.get("time", {}).get("scheduled", {}).get("arrival" if mode == "arrivals" else "departure", 0)
-            status = fl.get("status", {}).get("text", "")
-
-            key = f"{today_str}|{fn}"
-            bay = storage.get(key, {}).get("bay", "")
-            belt = storage.get(key, {}).get("belt", "")
+            key = get_today_key(flight_no, today)
+            extra = BAY_BELT_STORE.get(key, {"bay": "", "belt": ""})
 
             flights.append({
-                "flight": fn,
+                "flight": flight_no,
                 "reg": reg,
-                "from": from_airport,
-                "to": to_airport,
-                "eta": eta,
-                "std": std,
-                "status": status,
-                "bay": bay,
-                "belt": belt
+                "from": fl.get("airport", {}).get("origin", {}).get("code", {}).get("iata", ""),
+                "to": fl.get("airport", {}).get("destination", {}).get("code", {}).get("iata", ""),
+                "eta": fl.get("time", {}).get("estimated", {}).get("arrival" if mode == "arrivals" else "departure", 0),
+                "std": fl.get("time", {}).get("scheduled", {}).get("arrival" if mode == "arrivals" else "departure", 0),
+                "status": fl.get("status", {}).get("text", ""),
+                "model": fl.get("aircraft", {}).get("model", {}).get("code", ""),
+                "bay": extra.get("bay", ""),
+                "belt": extra.get("belt", "")
             })
 
         return jsonify(flights)
@@ -101,26 +92,22 @@ def get_flights():
 
 @app.route("/update", methods=["POST"])
 def update_bay_belt():
-    try:
-        data = request.json
-        username = data.get("username")
-        password = data.get("password")
-        flight = data.get("flight")
-        bay = data.get("bay")
-        belt = data.get("belt")
+    auth = request.authorization
+    if not auth or not (auth.username == "Aswin" and auth.password == "admin"):
+        return abort(401)
 
-        if username != "Aswin" or password != "admin":
-            return jsonify({"error": "Unauthorized"}), 403
+    data = request.get_json()
+    flight_no = data.get("flight")
+    bay = data.get("bay", "")
+    belt = data.get("belt", "")
+    if not flight_no:
+        return jsonify({"error": "Missing flight number"}), 400
 
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        key = f"{today_str}|{flight}"
-        store = load_storage()
-        store[key] = {"bay": bay, "belt": belt}
-        save_storage(store)
-        return jsonify({"success": True})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    key = get_today_key(flight_no, today)
+    BAY_BELT_STORE[key] = {"bay": bay, "belt": belt}
+    save_storage()
+    return jsonify({"success": True})
 
 @app.route("/")
 def home():
