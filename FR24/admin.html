@@ -17,7 +17,17 @@
 <body>
   <header>
     <h1>Admin Panel</h1>
-    <button onclick="location.href='index.html'">Back to Tracker</button>
+    <div>
+      <label>
+        Airline Filter:
+        <select id="airlineFilter">
+          <option value="all">All</option>
+          <option value="IX">IX Only</option>
+          <option value="IXAI">IX + AI</option>
+        </select>
+      </label>
+      <button onclick="location.href='index.html'">Back to Tracker</button>
+    </div>
   </header>
 
   <table>
@@ -38,51 +48,62 @@
     const API_BASE = "https://kittu-0wb2.onrender.com";
     const username = "Aswin";
     const password = "admin";
+    const allowedAirlines = ["IX", "AK", "FD", "FZ", "UL", "J9"];
+
+    document.getElementById("airlineFilter").addEventListener("change", fetchFlights);
+
+    function filterFlight(flightNo) {
+      const filter = document.getElementById("airlineFilter").value;
+      if (filter === "IX") return flightNo.startsWith("IX");
+      if (filter === "IXAI") return flightNo.startsWith("IX") || flightNo.startsWith("AI");
+      return allowedAirlines.includes(flightNo.slice(0, 2));
+    }
 
     async function fetchFlights() {
       try {
         const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
         const flights = await res.json();
-
         const tbody = document.getElementById("admin-table");
         tbody.innerHTML = "";
 
-        flights.forEach(flight => {
-          const row = document.createElement("tr");
+        flights
+          .filter(f => filterFlight(f.flight || ""))
+          .forEach(flight => {
+            const row = document.createElement("tr");
 
-          // Flight number cell
-          const flightCell = document.createElement("td");
-          flightCell.textContent = flight.flight || "-";
+            // Flight number cell
+            const flightCell = document.createElement("td");
+            flightCell.textContent = flight.flight || "-";
 
-          // Bay input cell
-          const bayCell = document.createElement("td");
-          const bayInput = document.createElement("input");
-          bayInput.type = "text";
-          bayInput.value = flight.bay || "";
-          bayCell.appendChild(bayInput);
+            // Bay input cell
+            const bayCell = document.createElement("td");
+            const bayInput = document.createElement("input");
+            bayInput.type = "text";
+            bayInput.value = flight.bay || "";
+            bayCell.appendChild(bayInput);
 
-          // Belt input cell
-          const beltCell = document.createElement("td");
-          const beltInput = document.createElement("input");
-          beltInput.type = "text";
-          beltInput.value = flight.belt || "";
-          beltCell.appendChild(beltInput);
+            // Belt input cell
+            const beltCell = document.createElement("td");
+            const beltInput = document.createElement("input");
+            beltInput.type = "text";
+            beltInput.value = flight.belt || "";
+            beltCell.appendChild(beltInput);
 
-          // Update button cell
-          const updateCell = document.createElement("td");
-          const updateBtn = document.createElement("button");
-          updateBtn.textContent = "Update";
-          updateBtn.onclick = () => updateBayBelt(flight.flight, bayInput.value, beltInput.value);
-          updateCell.appendChild(updateBtn);
+            // Update button cell
+            const updateCell = document.createElement("td");
+            const updateBtn = document.createElement("button");
+            updateBtn.textContent = "Update";
+            updateBtn.onclick = () => updateBayBelt(flight.flight, bayInput.value, beltInput.value);
+            updateCell.appendChild(updateBtn);
 
-          // Append cells to row
-          row.appendChild(flightCell);
-          row.appendChild(bayCell);
-          row.appendChild(beltCell);
-          row.appendChild(updateCell);
+            // Add all cells to row
+            row.appendChild(flightCell);
+            row.appendChild(bayCell);
+            row.appendChild(beltCell);
+            row.appendChild(updateCell);
 
-          tbody.appendChild(row);
-        });
+            tbody.appendChild(row);
+          });
       } catch (err) {
         alert("Failed to load flights: " + err.message);
         console.error(err);
@@ -103,8 +124,6 @@
 
         if (res.ok) {
           alert(`Updated bay and belt for flight ${flight}`);
-        } else if (res.status === 401) {
-          alert("Unauthorized: Please check your username and password.");
         } else {
           const errorData = await res.json();
           alert("Update failed: " + (errorData.error || "Unknown error"));
@@ -115,7 +134,7 @@
       }
     }
 
-    // Load flights on page load
+    // Load on first run
     fetchFlights();
   </script>
 </body>
