@@ -109,37 +109,27 @@ def update_bay_belt():
     save_storage()
     return jsonify({"success": True})
 
-@app.route("/")
-def home():
-    return "AIX Flight Tracker API is running!"
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
 @app.route("/search")
 def search_flight():
-    flight_query = request.args.get("flight", "").upper()
-    timestamp = request.args.get("ts")
-    ts = int(timestamp) if timestamp else int(time.time())
-
-    if not flight_query:
-        return jsonify({"error": "Missing flight parameter"}), 400
+    flight_no = request.args.get("flight", "").upper().strip()
+    if not flight_no:
+        return jsonify([])
 
     allowed_prefixes = ("IX", "AK", "FD", "FZ", "UL", "J9")
+    if not any(flight_no.startswith(prefix) for prefix in allowed_prefixes):
+        return jsonify([])
 
-    if not any(flight_query.startswith(pfx) for pfx in allowed_prefixes):
-        return jsonify([])  # return empty if not allowed prefix
-
-    found_flights = []
+    ts = int(time.time())
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    results = []
 
     for mode in ["arrivals", "departures"]:
         try:
             res = requests.get(build_url(mode, ts), headers=HEADERS)
             res.raise_for_status()
-            data = res.json()
             flights_raw = (
-                data.get("result", {})
+                res.json()
+                .get("result", {})
                 .get("response", {})
                 .get("airport", {})
                 .get("pluginData", {})
@@ -148,20 +138,15 @@ def search_flight():
                 .get("data", [])
             )
 
-            today = datetime.utcnow().strftime("%Y-%m-%d")
-
             for f in flights_raw:
                 fl = f.get("flight", {})
-                flight_no = fl.get("identification", {}).get("number", {}).get("default", "")
-                if flight_no.upper().startswith(flight_query):
-                    reg = fl.get("aircraft", {}).get("registration", "")
-                    key = get_today_key(flight_no, today)
+                num = fl.get("identification", {}).get("number", {}).get("default", "")
+                if num.upper() == flight_no:
+                    key = get_today_key(num, today)
                     extra = BAY_BELT_STORE.get(key, {"bay": "", "belt": ""})
-
-                    found_flights.append({
-                        "flight": flight_no,
-                        "reg": reg,
-                        "mode": mode,
+                    results.append({
+                        "flight": num,
+                        "reg": fl.get("aircraft", {}).get("registration", ""),
                         "from": fl.get("airport", {}).get("origin", {}).get("code", {}).get("iata", ""),
                         "to": fl.get("airport", {}).get("destination", {}).get("code", {}).get("iata", ""),
                         "eta": fl.get("time", {}).get("estimated", {}).get("arrival" if mode == "arrivals" else "departure", 0),
@@ -171,7 +156,15 @@ def search_flight():
                         "bay": extra.get("bay", ""),
                         "belt": extra.get("belt", "")
                     })
-        except:
+        except Exception:
             continue
 
-    return jsonify(found_flights)
+    return jsonify(results)
+
+@app.route("/")
+def home():
+    return "AIX Flight Tracker API is running!"
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
