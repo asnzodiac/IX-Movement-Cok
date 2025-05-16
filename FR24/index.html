@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIX Flight Tracker</title>
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f0f0f0; }
+    .followed { background: #ffffcc; }
+  </style>
+</head>
+<body>
+  <h1>AIX Flight Tracker</h1>
+  <div>
+    <a href="admin.html"><button>Admin</button></a>
+    <select id="airlineFilter">
+      <option value="all">All</option>
+      <option value="ix">IX Only</option>
+      <option value="ixai">IX + AI</option>
+    </select>
+    <select id="sortOption">
+      <option value="scheduled" selected>STA / STD</option>
+      <option value="estimated">ETA / ETD</option>
+    </select>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Flight</th><th>Reg</th><th>From</th><th>To</th><th>STA/STD</th><th>ETA/ETD</th><th>Status</th><th>Aircraft</th><th>Bay</th><th>Belt</th><th>Follow</th></tr>
+    </thead>
+    <tbody id="flightTable"><tr><td colspan="11">Loading...</td></tr></tbody>
+  </table>
+  <script>
+    const API = "https://kittu-0wb2.onrender.com";
+    let followed = JSON.parse(localStorage.getItem("followed") || "[]");
+
+    function fetchFlights() {
+      fetch(`${API}/flights?mode=arrivals`)
+        .then(res => res.json())
+        .then(data => renderTable(data));
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById("flightTable");
+      const filter = document.getElementById("airlineFilter").value;
+      const sortOpt = document.getElementById("sortOption").value;
+      const now = Date.now() / 1000;
+
+      const filtered = data.filter(f => {
+        const prefix = f.flight.slice(0, 2);
+        if (filter === "ix") return prefix === "IX";
+        if (filter === "ixai") return ["IX", "AI"].includes(prefix);
+        return ["IX", "AI", "AK", "FD", "FZ", "UL", "J9"].includes(prefix);
+      }).sort((a, b) => (a[sortOpt] || 0) - (b[sortOpt] || 0));
+
+      tbody.innerHTML = "";
+      filtered.forEach(f => {
+        const row = document.createElement("tr");
+        if (followed.includes(f.flight)) row.classList.add("followed");
+        const eta = f.eta ? new Date(f.eta * 1000).toLocaleTimeString() : "-";
+        const std = f.std ? new Date(f.std * 1000).toLocaleTimeString() : "-";
+        row.innerHTML = `
+          <td>${f.flight}</td>
+          <td>${f.reg}</td>
+          <td>${f.from}</td>
+          <td>${f.to}</td>
+          <td>${std}</td>
+          <td>${eta}</td>
+          <td>${f.status}</td>
+          <td>${f.aircraft || ""}</td>
+          <td>${f.bay || ""}</td>
+          <td>${f.belt || ""}</td>
+          <td><input type="checkbox" ${followed.includes(f.flight) ? "checked" : ""}
+            onchange="toggleFollow('${f.flight}', this.checked)"></td>`;
+        tbody.appendChild(row);
+      });
+    }
+
+    function toggleFollow(flight, checked) {
+      if (checked) followed.push(flight);
+      else followed = followed.filter(f => f !== flight);
+      localStorage.setItem("followed", JSON.stringify(followed));
+    }
+
+    document.getElementById("airlineFilter").onchange = fetchFlights;
+    document.getElementById("sortOption").onchange = fetchFlights;
+
+    fetchFlights();
+    setInterval(fetchFlights, 30000);
+  </script>
+</body>
+</html>
