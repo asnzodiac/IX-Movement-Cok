@@ -3,29 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AIX SEC OPS</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon-192.png" />
+  <title>AIX SEC OPS</title>
   <style>
     body { font-family: Arial; margin: 20px; }
-    .tabs { margin: 15px 0; }
-    .tab { padding: 10px; margin-right: 5px; cursor: pointer; display: inline-block; border: 1px solid #ccc; }
-    .tab.active { background: #007bff; color: white; }
-    .tab-content { display: none; }
+    header { display: flex; justify-content: space-between; align-items: center; }
+    .tabs { margin-top: 20px; }
+    .tab { padding: 10px; cursor: pointer; display: inline-block; border: 1px solid #ccc; margin-right: 5px; }
+    .tab.active { background: #007bff; color: #fff; }
+    .tab-content { display: none; margin-top: 10px; }
     .tab-content.active { display: block; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
-    th { background: #f0f0f0; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f2f2f2; }
     .status-green { color: green; }
     .status-orange { color: orange; }
     .status-red { color: red; }
-    .flight-logo { width: 20px; vertical-align: middle; }
-    #followed-flights ul { list-style: none; padding: 0; }
   </style>
 </head>
 <body>
-  <h1>AIX SEC OPS</h1>
-  <button onclick="location.href='admin.html'">Admin</button>
+  <header>
+    <h1>AIX SEC OPS</h1>
+    <div>
+      <button onclick="location.href='admin.html'">Admin</button>
+      <button id="themeToggle">Dark Mode</button>
+    </div>
+  </header>
+
+  <label>Airline Filter:
+    <select id="airlineFilter">
+      <option value="all">All</option>
+      <option value="IX">IX Only</option>
+      <option value="IXAI">IX + AI</option>
+    </select>
+  </label>
 
   <div class="tabs">
     <div class="tab active" data-tab="arrivals">Arrivals</div>
@@ -34,141 +46,117 @@
   </div>
 
   <div id="arrivals" class="tab-content active">
-    <h3>Arrivals</h3>
-    <select id="arrivalsAirlineFilter">
-      <option value="all">All</option>
-      <option value="IX">IX Only</option>
-      <option value="IXAI">IX + AI</option>
-    </select>
-    <select id="arrivalsSort">
-      <option value="scheduled">STA</option>
-      <option value="estimated">ETA</option>
-    </select>
-    <table id="arrivalsTable">
+    <table>
       <thead>
-        <tr><th>Flight</th><th>Reg</th><th>From</th><th>STA</th><th>ETA</th><th>A/C</th><th>Status</th></tr>
+        <tr><th>Flight</th><th>From</th><th>ETA</th><th>STA</th><th>A/C</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
       </thead>
-      <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
+      <tbody id="arrivals-table"><tr><td colspan="9">Loading...</td></tr></tbody>
     </table>
   </div>
 
   <div id="departures" class="tab-content">
-    <h3>Departures</h3>
-    <select id="departuresAirlineFilter">
-      <option value="all">All</option>
-      <option value="IX">IX Only</option>
-      <option value="IXAI">IX + AI</option>
-    </select>
-    <select id="departuresSort">
-      <option value="scheduled">STD</option>
-      <option value="estimated">ETD</option>
-    </select>
-    <table id="departuresTable">
+    <table>
       <thead>
-        <tr><th>Flight</th><th>Reg</th><th>To</th><th>STD</th><th>ETD</th><th>A/C</th><th>Status</th></tr>
+        <tr><th>Flight</th><th>To</th><th>ETD</th><th>STD</th><th>A/C</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
       </thead>
-      <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
+      <tbody id="departures-table"><tr><td colspan="9">Loading...</td></tr></tbody>
     </table>
   </div>
 
   <div id="turnaround" class="tab-content">
-    <h3>Turnaround</h3>
-    <select id="turnaroundAirlineFilter">
-      <option value="all">All</option>
-      <option value="IX">IX Only</option>
-      <option value="IXAI">IX + AI</option>
-    </select>
-    <select id="turnaroundSort">
-      <option value="scheduled">STA/STD</option>
-      <option value="estimated">ETA/ETD</option>
-    </select>
-    <table id="turnaroundTable">
+    <table>
       <thead>
-        <tr><th>Arrival</th><th>Reg</th><th>Departure</th><th>STA/STD</th><th>Sector</th><th>A/C</th><th>Status</th></tr>
+        <tr><th>Arr / Dep</th><th>Reg</th><th>STA / STD</th><th>Sector</th><th>A/C</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
       </thead>
-      <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
+      <tbody id="turnaround-table"><tr><td colspan="8">Loading...</td></tr></tbody>
     </table>
   </div>
 
   <script>
-    const API = "https://kittu-0wb2.onrender.com";
-    const airlineFilterMatch = (flt, filter) => {
-      const prefix = flt.flight.slice(0, 2);
-      if (filter === "IX") return prefix === "IX";
-      if (filter === "IXAI") return ["IX", "AI"].includes(prefix);
-      return ["IX", "AK", "FD", "FZ", "J9", "UL"].includes(prefix);
-    };
-
-    const toTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
-    const loadData = async (mode, tableId, filterId, sortId) => {
-      const res = await fetch(`${API}/flights?mode=${mode}`);
-      const data = await res.json();
-      const table = document.querySelector(`#${tableId} tbody`);
-      const filter = document.getElementById(filterId).value;
-      const sortBy = document.getElementById(sortId).value;
-      const rows = (Array.isArray(data) ? data : []).filter(f => airlineFilterMatch(f, filter))
-        .sort((a, b) => (a[sortBy] || 0) - (b[sortBy] || 0))
-        .map(f => {
-          return `<tr>
-            <td>${f.flight}</td>
-            <td>${f.reg}</td>
-            <td>${mode === "arrivals" ? f.from : f.to}</td>
-            <td>${toTime(f.std)}</td>
-            <td>${toTime(f.eta)}</td>
-            <td>${f.type || '-'}</td>
-            <td>${f.status}</td>
-          </tr>`;
-        }).join("");
-      table.innerHTML = rows || "<tr><td colspan='7'>No flights found</td></tr>";
-    };
-
-    const loadTurnaround = async () => {
-      const [arr, dep] = await Promise.all([
-        fetch(`${API}/flights?mode=arrivals`).then(r => r.json()),
-        fetch(`${API}/flights?mode=departures`).then(r => r.json())
-      ]);
-      const filter = document.getElementById("turnaroundAirlineFilter").value;
-      const sortBy = document.getElementById("turnaroundSort").value;
-      const regMap = {};
-      arr.forEach(f => regMap[f.reg] = f);
-      const rows = dep.filter(f => regMap[f.reg] && airlineFilterMatch(f, filter))
-        .sort((a, b) => ((a[sortBy] || 0) - (b[sortBy] || 0)))
-        .map(f => {
-          const a = regMap[f.reg];
-          return `<tr>
-            <td>${a.flight}</td>
-            <td>${f.reg}</td>
-            <td>${f.flight}</td>
-            <td>${toTime(a.std)} / ${toTime(f.std)}</td>
-            <td>${a.from} - COK - ${f.to}</td>
-            <td>${a.type || '-'}</td>
-            <td>${a.status}</td>
-          </tr>`;
-        }).join("");
-      document.querySelector("#turnaroundTable tbody").innerHTML = rows || "<tr><td colspan='7'>No turnarounds</td></tr>";
-    };
+    const API_BASE = 'https://kittu-0wb2.onrender.com';
+    const activeAirlines = ["IX", "AK", "FD", "FZ", "UL", "J9"];
 
     document.querySelectorAll(".tab").forEach(tab => {
-      tab.addEventListener("click", () => {
+      tab.onclick = () => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
         tab.classList.add("active");
         document.getElementById(tab.dataset.tab).classList.add("active");
-        refresh();
-      });
+      };
     });
 
-    const refresh = () => {
-      loadData("arrivals", "arrivalsTable", "arrivalsAirlineFilter", "arrivalsSort");
-      loadData("departures", "departuresTable", "departuresAirlineFilter", "departuresSort");
+    function toTime(ts) {
+      return ts ? new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : "-";
+    }
+
+    function filterFlight(flightNo) {
+      const filter = document.getElementById('airlineFilter').value;
+      if (filter === "IX") return flightNo.startsWith("IX");
+      if (filter === "IXAI") return flightNo.startsWith("IX") || flightNo.startsWith("AI");
+      return activeAirlines.includes(flightNo.slice(0, 2));
+    }
+
+    async function loadFlights(mode, tableId) {
+      const res = await fetch(`${API_BASE}/flights?mode=${mode}`);
+      const data = await res.json();
+      const tbody = document.getElementById(tableId);
+      tbody.innerHTML = "";
+
+      data.filter(f => filterFlight(f.flight)).forEach(f => {
+        const row = `<tr>
+          <td>${f.flight}</td>
+          <td>${mode === 'arrivals' ? f.from : f.to}</td>
+          <td>${toTime(f.eta)}</td>
+          <td>${toTime(f.std)}</td>
+          <td>${f.type || '-'}</td>
+          <td>${f.reg}</td>
+          <td>${f.status}</td>
+          <td>${f.bay || '-'}</td>
+          <td>${f.belt || '-'}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    async function loadTurnaround() {
+      const resArr = await fetch(`${API_BASE}/flights?mode=arrivals`);
+      const resDep = await fetch(`${API_BASE}/flights?mode=departures`);
+      const arr = await resArr.json();
+      const dep = await resDep.json();
+      const tbody = document.getElementById('turnaround-table');
+      tbody.innerHTML = "";
+
+      arr.forEach(a => {
+        const match = dep.find(d => d.reg === a.reg && (d.std > a.std));
+        if (!match || !filterFlight(a.flight)) return;
+        const row = `<tr>
+          <td>${a.flight} / ${match.flight}</td>
+          <td>${a.reg}</td>
+          <td>${toTime(a.std)} / ${toTime(match.std)}</td>
+          <td>${a.from} - COK - ${match.to}</td>
+          <td>${a.type || '-'}</td>
+          <td>${a.status}</td>
+          <td>${a.bay || '-'}</td>
+          <td>${a.belt || '-'}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    document.getElementById("airlineFilter").onchange = () => {
+      loadFlights("arrivals", "arrivals-table");
+      loadFlights("departures", "departures-table");
       loadTurnaround();
     };
 
-    ["arrivalsAirlineFilter", "arrivalsSort", "departuresAirlineFilter", "departuresSort", "turnaroundAirlineFilter", "turnaroundSort"]
-      .forEach(id => document.getElementById(id).addEventListener("change", refresh));
-
-    refresh();
-    setInterval(refresh, 30000);
+    loadFlights("arrivals", "arrivals-table");
+    loadFlights("departures", "departures-table");
+    loadTurnaround();
+    setInterval(() => {
+      loadFlights("arrivals", "arrivals-table");
+      loadFlights("departures", "departures-table");
+      loadTurnaround();
+    }, 30000);
   </script>
 </body>
 </html>
