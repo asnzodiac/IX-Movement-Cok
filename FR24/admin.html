@@ -1,65 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Admin – Bay/Belt Editor</title>
+  <meta charset="UTF-8" />
+  <title>Admin - AIX SEC OPS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-    th { background: #333; color: white; }
-    input[type="text"] { width: 80px; }
-    #backBtn { float: right; background: #555; color: white; border: none; padding: 6px 10px; border-radius: 4px; }
+    body { font-family: Arial; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #f0f0f0; }
+    .status-green { color: green; }
+    .status-orange { color: orange; }
+    .status-red { color: red; }
+    .btn { padding: 5px 10px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <h2>
-    Admin Panel – Bay & Belt
-    <button id="backBtn" onclick="location.href='index.html'">Back</button>
-  </h2>
+  <h2>Admin Panel - Edit Bay & Belt</h2>
+  <button onclick="window.location.href='index.html'">Back to Main</button>
+
+  <label for="airlineFilter"><strong>Filter:</strong></label>
+  <select id="airlineFilter">
+    <option value="all">All</option>
+    <option value="IX">IX Only</option>
+    <option value="IXAI">IX + AI</option>
+  </select>
+
   <table id="adminTable">
-    <thead><tr>
-      <th>Flight</th><th>From</th><th>ETA</th><th>Status</th><th>Bay</th><th>Belt</th><th>Save</th>
-    </tr></thead>
-    <tbody></tbody>
+    <thead>
+      <tr>
+        <th>Flight</th>
+        <th>Reg</th>
+        <th>From</th>
+        <th>STA</th>
+        <th>ETA</th>
+        <th>Aircraft</th>
+        <th>Status</th>
+        <th>Bay</th>
+        <th>Belt</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="10">Loading...</td></tr>
+    </tbody>
   </table>
 
   <script>
-    const API_BASE = "https://kittu-0wb2.onrender.com";
+    const API = "https://kittu-0wb2.onrender.com";  // Change to your backend URL if different
+    const toTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+
+    function airlineFilterMatch(flt, filter) {
+      const prefix = flt.flight.slice(0, 2);
+      if (filter === "IX") return prefix === "IX";
+      if (filter === "IXAI") return ["IX", "AI"].includes(prefix);
+      return ["IX", "AK", "FD", "FZ", "J9", "UL"].includes(prefix);
+    }
+
     async function loadFlights() {
-      const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
-      const data = await res.json();
+      const res = await fetch(`${API}/flights?mode=arrivals`);
+      const flights = await res.json();
+      const filter = document.getElementById("airlineFilter").value;
       const tbody = document.querySelector("#adminTable tbody");
       tbody.innerHTML = "";
-      data.forEach(f => {
+
+      flights.filter(f => airlineFilterMatch(f, filter)).forEach(f => {
         const row = document.createElement("tr");
         row.innerHTML = `
-          <td>${f.flight}</td><td>${f.from}</td><td>${new Date(f.eta * 1000).toLocaleTimeString()}</td><td>${f.status}</td>
-          <td><input type="text" value="${f.bay}" id="bay-${f.flight}"></td>
-          <td><input type="text" value="${f.belt}" id="belt-${f.flight}"></td>
-          <td><button onclick="save('${f.flight}')">Save</button></td>
+          <td>${f.flight}</td>
+          <td>${f.reg}</td>
+          <td>${f.from}</td>
+          <td>${toTime(f.std)}</td>
+          <td>${toTime(f.eta)}</td>
+          <td>${f.type || '-'}</td>
+          <td>${f.status}</td>
+          <td><input type="text" value="${f.bay || ''}" size="4" id="bay-${f.flight}"></td>
+          <td><input type="text" value="${f.belt || ''}" size="4" id="belt-${f.flight}"></td>
+          <td><button class="btn" onclick="save('${f.flight}')">Save</button></td>
         `;
         tbody.appendChild(row);
       });
     }
 
-    function save(flight) {
+    async function save(flight) {
       const bay = document.getElementById(`bay-${flight}`).value;
       const belt = document.getElementById(`belt-${flight}`).value;
-      fetch(`${API_BASE}/update`, {
+
+      const password = prompt("Enter admin password:");
+      if (password !== "admin") {
+        alert("Incorrect password!");
+        return;
+      }
+
+      const res = await fetch(`${API}/update-baybelt`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Basic " + btoa("Aswin:admin")
-        },
-        body: JSON.stringify({ flight, bay, belt })
-      }).then(r => {
-        if (r.ok) alert("Saved!");
-        else alert("Failed!");
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flight, bay, belt, password })
       });
+
+      const result = await res.json();
+      if (res.ok) {
+        alert("Saved!");
+        loadFlights();
+      } else {
+        alert(result.error || "Failed to update.");
+      }
     }
 
+    document.getElementById("airlineFilter").addEventListener("change", loadFlights);
+
     loadFlights();
+    setInterval(loadFlights, 30000);
   </script>
 </body>
 </html>
