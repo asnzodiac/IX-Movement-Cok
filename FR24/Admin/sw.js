@@ -1,6 +1,6 @@
 const CACHE_NAME = "aix-ops-cache-v1";
 const urlsToCache = [
-  "/admin.html",
+  "/index.html",
   "https://cdn.tailwindcss.com"
 ];
 
