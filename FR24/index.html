@@ -7,19 +7,24 @@
   <link rel="icon" href="icon-192.png" />
   <title>AIX SEC OPS</title>
   <style>
-    body { font-family: Arial; margin: 20px; }
+    body { font-family: Arial; margin: 20px; background: #fff; color: #000; transition: background-color 0.3s, color 0.3s;}
+    body.dark { background: #121212; color: #ddd; }
     header { display: flex; justify-content: space-between; align-items: center; }
     .tabs { margin-top: 20px; }
-    .tab { padding: 10px; cursor: pointer; display: inline-block; border: 1px solid #ccc; margin-right: 5px; }
-    .tab.active { background: #007bff; color: #fff; }
+    .tab { padding: 10px; cursor: pointer; display: inline-block; border: 1px solid #ccc; margin-right: 5px; border-radius: 4px;}
+    .tab.active { background: #007bff; color: #fff; border-color: #007bff;}
     .tab-content { display: none; margin-top: 10px; }
     .tab-content.active { display: block; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background: #f2f2f2; }
+    body.dark th { background: #333; }
     .status-green { color: green; }
     .status-orange { color: orange; }
     .status-red { color: red; }
+    button { cursor: pointer; padding: 6px 12px; margin-left: 10px; border-radius: 4px; border:none; background:#007bff; color:#fff; }
+    button:hover { background:#0056b3; }
+    select { padding: 4px; }
   </style>
 </head>
 <body>
@@ -48,7 +53,7 @@
   <div id="arrivals" class="tab-content active">
     <table>
       <thead>
-        <tr><th>Flight</th><th>From</th><th>ETA</th><th>STA</th><th>A/C</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
+        <tr><th>Flight</th><th>From</th><th>ETA</th><th>STA</th><th>A/C Type</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
       </thead>
       <tbody id="arrivals-table"><tr><td colspan="9">Loading...</td></tr></tbody>
     </table>
@@ -57,7 +62,7 @@
   <div id="departures" class="tab-content">
     <table>
       <thead>
-        <tr><th>Flight</th><th>To</th><th>ETD</th><th>STD</th><th>A/C</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
+        <tr><th>Flight</th><th>To</th><th>ETD</th><th>STD</th><th>A/C Type</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
       </thead>
       <tbody id="departures-table"><tr><td colspan="9">Loading...</td></tr></tbody>
     </table>
@@ -66,7 +71,7 @@
   <div id="turnaround" class="tab-content">
     <table>
       <thead>
-        <tr><th>Arr / Dep</th><th>Reg</th><th>STA / STD</th><th>Sector</th><th>A/C</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
+        <tr><th>Arr / Dep Flight</th><th>Reg</th><th>STA / STD</th><th>Sector</th><th>A/C Type</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
       </thead>
       <tbody id="turnaround-table"><tr><td colspan="8">Loading...</td></tr></tbody>
     </table>
@@ -76,6 +81,7 @@
     const API_BASE = 'https://kittu-0wb2.onrender.com';
     const activeAirlines = ["IX", "AK", "FD", "FZ", "UL", "J9"];
 
+    // Tabs logic
     document.querySelectorAll(".tab").forEach(tab => {
       tab.onclick = () => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -84,6 +90,19 @@
         document.getElementById(tab.dataset.tab).classList.add("active");
       };
     });
+
+    // Dark mode toggle
+    const themeToggle = document.getElementById('themeToggle');
+    themeToggle.onclick = () => {
+      document.body.classList.toggle('dark');
+      themeToggle.textContent = document.body.classList.contains('dark') ? 'Light Mode' : 'Dark Mode';
+      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+    };
+    // Load saved theme
+    if(localStorage.getItem('theme') === 'dark') {
+      document.body.classList.add('dark');
+      themeToggle.textContent = 'Light Mode';
+    }
 
     function toTime(ts) {
       return ts ? new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : "-";
@@ -108,7 +127,7 @@
           <td>${mode === 'arrivals' ? f.from : f.to}</td>
           <td>${toTime(f.eta)}</td>
           <td>${toTime(f.std)}</td>
-          <td>${f.type || '-'}</td>
+          <td>${f.model || '-'}</td>
           <td>${f.reg}</td>
           <td>${f.status}</td>
           <td>${f.bay || '-'}</td>
@@ -127,14 +146,17 @@
       tbody.innerHTML = "";
 
       arr.forEach(a => {
-        const match = dep.find(d => d.reg === a.reg && (d.std > a.std));
-        if (!match || !filterFlight(a.flight)) return;
+        if(!filterFlight(a.flight)) return;
+        // Find matching departure with same reg and departs within 2 hours of arrival std
+        const match = dep.find(d => d.reg === a.reg && d.std > a.std && (d.std - a.std) <= 7200 && filterFlight(d.flight));
+        if (!match) return;
+
         const row = `<tr>
           <td>${a.flight} / ${match.flight}</td>
           <td>${a.reg}</td>
           <td>${toTime(a.std)} / ${toTime(match.std)}</td>
           <td>${a.from} - COK - ${match.to}</td>
-          <td>${a.type || '-'}</td>
+          <td>${a.model || '-'}</td>
           <td>${a.status}</td>
           <td>${a.bay || '-'}</td>
           <td>${a.belt || '-'}</td>
