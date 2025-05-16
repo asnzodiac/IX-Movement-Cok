@@ -73,7 +73,7 @@
       <option value="status_desc">Status Desc</option>
     </select>
 
-    <button id="loadEarlierBtn">Load Earlier Flights (4 hrs)</button>
+    <button id="loadEarlierBtn">Load Earlier Flights </button>
   </div>
 
   <!-- Arrivals Table -->
@@ -156,7 +156,7 @@
   // Load Earlier Flights button
   document.getElementById('loadEarlierBtn').addEventListener('click', async () => {
     const earliest = earliestTimestamp[currentTab];
-    const fourHoursEarlier = earliest - 4 * 3600;
+    const fourHoursEarlier = earliest - 1 * 3600;
     if(fourHoursEarlier <= 0) {
       alert('No earlier flights available.');
       return;
