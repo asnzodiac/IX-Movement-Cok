@@ -35,6 +35,12 @@
       <button id="themeToggle">Dark Mode</button>
     </div>
   </header>
+  <div style="text-align:center; margin: 20px;">
+  <input id="searchInput" type="text" placeholder="Search Flight No (IX/AK/FD/FZ/UL/J9 only)" />
+  <button onclick="searchFlight()">Search</button>
+</div>
+
+<div id="searchResults" style="margin: 20px auto; width: 90%; max-width: 1200px;"></div>
 
   <label>Airline Filter:
     <select id="airlineFilter">
@@ -180,5 +186,57 @@
       loadTurnaround();
     }, 30000);
   </script>
+  <script>
+function searchFlight() {
+  const query = document.getElementById("searchInput").value.toUpperCase().trim();
+  if (!query) return;
+
+  fetch(`/search?flight=${query}`)
+    .then(res => res.json())
+    .then(data => {
+      const container = document.getElementById("searchResults");
+      if (!data || data.length === 0) {
+        container.innerHTML = "<p>No matching flights found.</p>";
+        return;
+      }
+
+      const rows = data.map(flight => `
+        <tr>
+          <td>${flight.flight}</td>
+          <td>${flight.reg}</td>
+          <td>${flight.from}</td>
+          <td>${flight.to}</td>
+          <td>${formatTime(flight.std)}</td>
+          <td>${formatTime(flight.eta)}</td>
+          <td>${flight.status}</td>
+          <td>${flight.bay}</td>
+          <td>${flight.belt}</td>
+        </tr>
+      `).join("");
+
+      container.innerHTML = `
+        <h3>Search Results</h3>
+        <table border="1" cellpadding="6" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th>Flight</th><th>Reg</th><th>From</th><th>To</th><th>STD</th><th>ETA</th><th>Status</th><th>Bay</th><th>Belt</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    })
+    .catch(err => {
+      console.error(err);
+      document.getElementById("searchResults").innerHTML = "<p>Error fetching search results.</p>";
+    });
+}
+
+function formatTime(unix) {
+  if (!unix) return "-";
+  const d = new Date(unix * 1000);
+  return d.toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit' });
+}
+</script>
 </body>
 </html>
