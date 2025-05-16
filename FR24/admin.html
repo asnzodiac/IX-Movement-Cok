@@ -28,6 +28,14 @@
       </label>
       <button onclick="location.href='index.html'">Back to ops</button>
     </div>
+    <hr />
+<h3>Search Flights</h3>
+<div style="margin-bottom: 10px;">
+  <input id="adminSearchInput" type="text" placeholder="Search Flight No (IX/AK/FD/FZ/UL/J9)" />
+  <button onclick="adminSearchFlight()">Search</button>
+</div>
+
+<div id="adminSearchResults"></div>
   </header>
 
   <table>
@@ -137,5 +145,56 @@
     // Load on first run
     fetchFlights();
   </script>
+  <script>
+function adminSearchFlight() {
+  const query = document.getElementById("adminSearchInput").value.toUpperCase().trim();
+  if (!query) return;
+
+  fetch(`/search?flight=${query}`)
+    .then(res => res.json())
+    .then(data => {
+      const container = document.getElementById("adminSearchResults");
+      if (!data || data.length === 0) {
+        container.innerHTML = "<p>No matching flights found.</p>";
+        return;
+      }
+
+      const rows = data.map(flight => `
+        <tr>
+          <td>${flight.flight}</td>
+          <td>${flight.reg}</td>
+          <td>${flight.from}</td>
+          <td>${flight.to}</td>
+          <td>${formatTime(flight.std)}</td>
+          <td>${formatTime(flight.eta)}</td>
+          <td>${flight.status}</td>
+          <td>${flight.bay}</td>
+          <td>${flight.belt}</td>
+        </tr>
+      `).join("");
+
+      container.innerHTML = `
+        <table border="1" cellpadding="6" style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+            <tr>
+              <th>Flight</th><th>Reg</th><th>From</th><th>To</th><th>STD</th><th>ETA</th><th>Status</th><th>Bay</th><th>Belt</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    })
+    .catch(err => {
+      console.error(err);
+      document.getElementById("adminSearchResults").innerHTML = "<p>Error fetching search results.</p>";
+    });
+}
+
+function formatTime(unix) {
+  if (!unix) return "-";
+  const d = new Date(unix * 1000);
+  return d.toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit' });
+}
+</script>
 </body>
 </html>
