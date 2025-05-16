@@ -116,3 +116,62 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
+@app.route("/search")
+def search_flight():
+    flight_query = request.args.get("flight", "").upper()
+    timestamp = request.args.get("ts")
+    ts = int(timestamp) if timestamp else int(time.time())
+
+    if not flight_query:
+        return jsonify({"error": "Missing flight parameter"}), 400
+
+    allowed_prefixes = ("IX", "AK", "FD", "FZ", "UL", "J9")
+
+    if not any(flight_query.startswith(pfx) for pfx in allowed_prefixes):
+        return jsonify([])  # return empty if not allowed prefix
+
+    found_flights = []
+
+    for mode in ["arrivals", "departures"]:
+        try:
+            res = requests.get(build_url(mode, ts), headers=HEADERS)
+            res.raise_for_status()
+            data = res.json()
+            flights_raw = (
+                data.get("result", {})
+                .get("response", {})
+                .get("airport", {})
+                .get("pluginData", {})
+                .get("schedule", {})
+                .get(mode, {})
+                .get("data", [])
+            )
+
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+
+            for f in flights_raw:
+                fl = f.get("flight", {})
+                flight_no = fl.get("identification", {}).get("number", {}).get("default", "")
+                if flight_no.upper().startswith(flight_query):
+                    reg = fl.get("aircraft", {}).get("registration", "")
+                    key = get_today_key(flight_no, today)
+                    extra = BAY_BELT_STORE.get(key, {"bay": "", "belt": ""})
+
+                    found_flights.append({
+                        "flight": flight_no,
+                        "reg": reg,
+                        "mode": mode,
+                        "from": fl.get("airport", {}).get("origin", {}).get("code", {}).get("iata", ""),
+                        "to": fl.get("airport", {}).get("destination", {}).get("code", {}).get("iata", ""),
+                        "eta": fl.get("time", {}).get("estimated", {}).get("arrival" if mode == "arrivals" else "departure", 0),
+                        "std": fl.get("time", {}).get("scheduled", {}).get("arrival" if mode == "arrivals" else "departure", 0),
+                        "status": fl.get("status", {}).get("text", ""),
+                        "model": fl.get("aircraft", {}).get("model", {}).get("code", ""),
+                        "bay": extra.get("bay", ""),
+                        "belt": extra.get("belt", "")
+                    })
+        except:
+            continue
+
+    return jsonify(found_flights)
