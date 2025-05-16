@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>AIX SEC OPS - Admin Panel</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="https://via.placeholder.com/192?text=AIX" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .logo-img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @media (max-width: 640px) {
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+      input { width: 60px; font-size: 0.875rem; }
+      button { font-size: 0.875rem; padding: 0.5rem 1rem; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+  <header class="bg-white shadow-md p-4 flex flex-col sm:flex-row justify-between items-center">
+    <div class="flex items-center justify-between w-full sm:w-auto">
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-800">AIX OPS Admin Panel</h1>
+      <span id="offlineStatus" class="text-sm text-red-500 hidden">Offline</span>
+    </div>
+    <div class="flex items-center space-x-4 mt-2 sm:mt-0">
+      <label class="flex items-center">
+        <span class="mr-2 text-gray-700 font-medium text-sm sm:text-base">Airline Filter:</span>
+        <select id="airlineFilter" class="border rounded-lg p-2 bg-white text-gray-700 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="all">All</option>
+          <option value="IX">IX Only</option>
+          <option value="IXAI">IX + AI</option>
+        </select>
+      </label>
+      <button onclick="location.href='https://api.whatsapp.com/send/?phone=%2B918589023699&text&type=phone_number&app_absent=0'" class="bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 transition">Contact Admin</button>
+    </div>
+  </header>
+
+  <div class="container mx-auto mt-6 p-4 bg-white rounded-lg shadow-md">
+    <div class="mb-4 flex justify-between items-center">
+      <button id="updateAllBtn" class="bg-purple-500 text-white px-3 py-2 rounded-lg hover:bg-purple-600 transition">Update All</button>
+      <span id="queuedUpdates" class="text-sm text-gray-500 hidden">0 updates queued</span>
+    </div>
+    <table class="w-full border-collapse">
+      <thead>
+        <tr class="bg-gray-200">
+          <th class="p-3 text-left text-gray-700 font-semibold">Flight</th>
+          <th class="p-3 text-left text-gray-700 font-semibold">Bay</th>
+          <th class="p-3 text-left text-gray-700 font-semibold">Belt</th>
+          <th class="p-3 text-left text-gray-700 font-semibold">Chocks On</th>
+          <th class="p-3 text-left text-gray-700 font-semibold">Chocks Off</th>
+          <th class="p-3 text-left text-gray-700 font-semibold">Update</th>
+        </tr>
+      </thead>
+      <tbody id="admin-table" class="text-gray-600">
+        <tr><td colspan="6" class="p-3 text-center">Loading flights...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const API_BASE = "https://kittu-0wb2.onrender.com";
+    const username = "Aswin";
+    const password = "admin";
+    const allowedAirlines = ["IX", "AK", "FD", "FZ", "UL", "J9"];
+    const airlineLogos = {
+      "IX": "https://cdn.brandfetch.io/idM6IAvrlf/w/820/h/248/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B",
+      "AK": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/AirAsia_New_Logo_%282020%29.svg/768px-AirAsia_New_Logo_%282020%29.svg.png",
+      "FD": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/AirAsia_New_Logo_%282020%29.svg/768px-AirAsia_New_Logo_%282020%29.svg.png",
+      "FZ": "https://cdn.brandfetch.io/idzRsGDSFE/w/800/h/162/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B",
+      "UL": "https://cdn.brandfetch.io/idZQkqhbVi/w/800/h/578/theme/dark/symbol.png?c=1dxbfHSJFAPEGdCLU4o5B",
+      "J9": "https://cdn.brandfetch.io/idRWbgTyu0/w/800/h/248/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B",
+      "AI": "https://cdn.brandfetch.io/id-PSmaCm4/w/800/h/284/theme/light/logo.png?c=1dxbfHSJFAPEGdCLU4o5B"
+    };
+
+    // Service Worker Registration
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").then(reg => {
+        console.log("Service Worker registered:", reg);
+      }).catch(err => {
+        console.error("Service Worker registration failed:", err);
+      });
+    }
+
+    // Offline Status Detection
+    const offlineStatus = document.getElementById("offlineStatus");
+    const queuedUpdates = document.getElementById("queuedUpdates");
+    window.addEventListener("online", () => {
+      offlineStatus.classList.add("hidden");
+      syncQueuedUpdates();
+    });
+    window.addEventListener("offline", () => {
+      offlineStatus.classList.remove("hidden");
+    });
+
+    // IndexedDB Setup
+    const dbPromise = indexedDB.open("AIXOpsDB", 1);
+    dbPromise.onupgradeneeded = event => {
+      const db = event.target.result;
+      db.createObjectStore("updates", { keyPath: "id", autoIncrement: true });
+    };
+
+    async function queueUpdate(updateData) {
+      const db = await dbPromise;
+      const tx = db.transaction("updates", "readwrite");
+      const store = tx.objectStore("updates");
+      await store.add(updateData);
+      updateQueuedCount();
+    }
+
+    async function syncQueuedUpdates() {
+      const db = await dbPromise;
+      const tx = db.transaction("updates", "readwrite");
+      const store = tx.objectStore("updates");
+      const updates = await store.getAll();
+      if (updates.length === 0) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/update`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Basic " + btoa(`${username}:${password}`)
+          },
+          body: JSON.stringify(updates.map(u => u.data)),
+          mode: "cors"
+        });
+
+        if (res.ok) {
+          const txClear = db.transaction("updates", "readwrite");
+          const storeClear = txClear.objectStore("updates");
+          await storeClear.clear();
+          alert(`Synced ${updates.length} queued updates.`);
+          updateQueuedCount();
+        } else {
+          const errorData = await res.json();
+          alert("Sync failed: " + (errorData.error || "Unknown error"));
+        }
+      } catch (err) {
+        console.error("Sync error:", err);
+      }
+    }
+
+    async function updateQueuedCount() {
+      const db = await dbPromise;
+      const tx = db.transaction("updates", "readonly");
+      const store = tx.objectStore("updates");
+      const count = await store.count();
+      queuedUpdates.textContent = `${count} updates queued`;
+      queuedUpdates.classList.toggle("hidden", count === 0);
+    }
+
+    document.getElementById("airlineFilter").addEventListener("change", fetchFlights);
+    document.getElementById("updateAllBtn").addEventListener("click", updateAllFlights);
+
+    function filterFlight(flightNo) {
+      const filter = document.getElementById("airlineFilter").value;
+      if (filter === "IX") return flightNo.startsWith("IX");
+      if (filter === "IXAI") return flightNo.startsWith("IX") || flightNo.startsWith("AI");
+      return allowedAirlines.includes(flightNo.slice(0, 2));
+    }
+
+    async function fetchFlights() {
+      try {
+        const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
+        const flights = await res.json();
+        const tbody = document.getElementById("admin-table");
+        tbody.innerHTML = "";
+
+        flights
+          .filter(f => filterFlight(f.flight || ""))
+          .forEach(flight => {
+            const row = document.createElement("tr");
+            row.className = "hover:bg-gray-50";
+
+            // Flight number cell with logo
+            const flightCell = document.createElement("td");
+            flightCell.className = "p-3";
+            const airlineCode = flight.flight?.slice(0, 2) || "";
+            const logoUrl = airlineLogos[airlineCode] || "https://via.placeholder.com/24?text=?";
+            flightCell.innerHTML = `<img src="${logoUrl}" class="logo-img" alt="${airlineCode} logo" /> ${flight.flight || "-"}`;
+
+            // Bay input cell
+            const bayCell = document.createElement("td");
+            bayCell.className = "p-3";
+            const bayInput = document.createElement("input");
+            bayInput.type = "text";
+            bayInput.value = flight.bay || "";
+            bayInput.className = "border rounded p-1 w-16 sm:w-20 focus:outline-none focus:ring-2 focus:ring-blue-500";
+            bayCell.appendChild(bayInput);
+
+            // Belt input cell
+            const beltCell = document.createElement("td");
+            beltCell.className = "p-3";
+            const beltInput = document.createElement("input");
+            beltInput.type = "text";
+            beltInput.value = flight.belt || "";
+            beltInput.className = "border rounded p-1 w-16 sm:w-20 focus:outline-none focus:ring-2 focus:ring-blue-500";
+            beltCell.appendChild(beltInput);
+
+            // Chocks On input cell
+            const chocksOnCell = document.createElement("td");
+            chocksOnCell.className = "p-3";
+            const chocksOnInput = document.createElement("input");
+            chocksOnInput.type = "text";
+            chocksOnInput.value = flight.chocksOn || "";
+            chocksOnInput.className = "border rounded p-1 w-16 sm:w-20 focus:outline-none focus:ring-2 focus:ring-blue-500";
+            chocksOnCell.appendChild(chocksOnInput);
+
+            // Chocks Off input cell
+            const chocksOffCell = document.createElement("td");
+            chocksOffCell.className = "p-3";
+            const chocksOffInput = document.createElement("input");
+            chocksOffInput.type = "text";
+            chocksOffInput.value = flight.chocksOff || "";
+            chocksOffInput.className = "border rounded p-1 w-16 sm:w-20 focus:outline-none focus:ring-2 focus:ring-blue-500";
+            chocksOffCell.appendChild(chocksOffInput);
+
+            // Update button cell
+            const updateCell = document.createElement("td");
+            updateCell.className = "p-3";
+            const updateBtn = document.createElement("button");
+            updateBtn.textContent = "Update";
+            updateBtn.className = "bg-green-500 text-white px-2 sm:px-3 py-1 rounded hover:bg-green-600 transition";
+            updateBtn.onclick = () => updateBayBelt(flight.flight, bayInput.value, beltInput.value, chocksOnInput.value, chocksOffInput.value);
+            updateCell.appendChild(updateBtn);
+
+            // Add all cells to row
+            row.appendChild(flightCell);
+            row.appendChild(bayCell);
+            row.appendChild(beltCell);
+            row.appendChild(chocksOnCell);
+            row.appendChild(chocksOffCell);
+            row.appendChild(updateCell);
+
+            tbody.appendChild(row);
+          });
+      } catch (err) {
+        alert("Failed to load flights: " + err.message);
+        console.error(err);
+      }
+    }
+
+    async function updateBayBelt(flight, bay, belt, chocksOn, chocksOff) {
+      const updateData = { flight, bay, belt, chocksOn, chocksOff };
+      if (!navigator.onLine) {
+        await queueUpdate({ data: updateData });
+        alert(`Update for ${flight} queued offline.`);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/update`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Basic " + btoa(`${username}:${password}`)
+          },
+          body: JSON.stringify(updateData),
+          mode: "cors"
+        });
+
+        if (res.ok) {
+          alert(`Updated bay, belt, chocks on, and chocks off for flight ${flight}`);
+        } else {
+          const errorData = await res.json();
+          alert("Update failed: " + (errorData.error || "Unknown error"));
+        }
+      } catch (err) {
+        await queueUpdate({ data: updateData });
+        alert(`Network error: Update for ${flight} queued offline.`);
+        console.error(err);
+      }
+    }
+
+    async function updateAllFlights() {
+      const tbody = document.getElementById("admin-table");
+      const rows = tbody.getElementsByTagName("tr");
+      const updates = [];
+
+      for (const row of rows) {
+        const flightCell = row.cells[0];
+        const inputs = row.getElementsByTagName("input");
+        const flight = flightCell.textContent.trim().split(" ").pop() || "";
+        if (flight === "-") continue;
+
+        const bay = inputs[0].value;
+        const belt = inputs[1].value;
+        const chocksOn = inputs[2].value;
+        const chocksOff = inputs[3].value;
+
+        updates.push({ flight, bay, belt, chocksOn, chocksOff });
+      }
+
+      if (updates.length === 0) {
+        alert("No flights to update.");
+        return;
+      }
+
+      if (!navigator.onLine) {
+        for (const update of updates) {
+          await queueUpdate({ data: update });
+        }
+        alert(`Queued ${updates.length} updates offline.`);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/update`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Basic " + btoa(`${username}:${password}`)
+          },
+          body: JSON.stringify(updates),
+          mode: "cors"
+        });
+
+        if (res.ok) {
+          alert(`Successfully updated ${updates.length} flights.`);
+        } else {
+          const errorData = await res.json();
+          alert("Update failed: " + (errorData.error || "Unknown error"));
+        }
+      } catch (err) {
+        for (const update of updates) {
+          await queueUpdate({ data: update });
+        }
+        alert(`Network error: Queued ${updates.length} updates offline.`);
+        console.error(err);
+      }
+    }
+
+    // Load on first run
+    fetchFlights();
+    updateQueuedCount();
+  </script>
+</body>
+</html>
