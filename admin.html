@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #eee; }
+  </style>
+</head>
+<body>
+  <h1>Update Bay & Belt</h1>
+  <div><label>Username: <input id="username" /></label> <label>Password: <input type="password" id="password" /></label>
+  <button onclick="login()">Login</button></div>
+  <br />
+  <table>
+    <thead><tr><th>Flight</th><th>STA/STD</th><th>Bay</th><th>Belt</th></tr></thead>
+    <tbody id="adminTable"></tbody>
+  </table>
+  <button onclick="submit()">Save Changes</button>
+  <script>
+    let auth = { user: "", pass: "" };
+    let allData = [];
+
+    function login() {
+      auth.user = document.getElementById("username").value;
+      auth.pass = document.getElementById("password").value;
+      fetchData();
+    }
+
+    function fetchData() {
+      fetch("https://kittu-0wb2.onrender.com/flights?mode=arrivals")
+        .then(res => res.json())
+        .then(data => {
+          allData = data;
+          const tbody = document.getElementById("adminTable");
+          tbody.innerHTML = "";
+          data.forEach((f, i) => {
+            const row = document.createElement("tr");
+            const std = f.std ? new Date(f.std * 1000).toLocaleTimeString() : "-";
+            row.innerHTML = `
+              <td>${f.flight}</td>
+              <td>${std}</td>
+              <td><input value="${f.bay || ""}" onchange="allData[${i}].bay = this.value" /></td>
+              <td><input value="${f.belt || ""}" onchange="allData[${i}].belt = this.value" /></td>
+            `;
+            tbody.appendChild(row);
+          });
+        });
+    }
+
+    function submit() {
+      fetch("https://kittu-0wb2.onrender.com/update-baybelt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Basic " + btoa(auth.user + ":" + auth.pass)
+        },
+        body: JSON.stringify(allData.filter(f => f.bay || f.belt))
+      }).then(res => {
+        if (res.ok) alert("Bay/Belt updated!");
+        else alert("Unauthorized or failed.");
+      });
+    }
+  </script>
+</body>
+</html>
