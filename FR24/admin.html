@@ -3,141 +3,151 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin - AIX SEC OPS</title>
+  <title>AIX SEC OPS - Admin</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: #f9f9f9;
-    }
-    h2 {
-      margin-bottom: 10px;
-    }
-    input, select, button {
-      margin: 5px;
-      padding: 8px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 8px;
-      border: 1px solid #ccc;
-      text-align: center;
-    }
-    .hidden {
-      display: none;
-    }
-    .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+    body { font-family: Arial; margin: 20px; background: #fff; color: #000; transition: background-color 0.3s, color 0.3s;}
+    body.dark { background: #121212; color: #ddd; }
+    header { display: flex; justify-content: space-between; align-items: center; }
+    button { cursor: pointer; padding: 6px 12px; margin-left: 10px; border-radius: 4px; border:none; background:#007bff; color:#fff; }
+    button:hover { background:#0056b3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f2f2f2; }
+    body.dark th { background: #333; }
+    input[type=text] { width: 100%; padding: 6px; box-sizing: border-box; }
+    .status-green { color: green; }
+    .status-orange { color: orange; }
+    .status-red { color: red; }
+    label { margin-right: 10px; }
   </style>
 </head>
 <body>
-  <div class="top-bar">
-    <h2>AIX Admin Panel</h2>
-    <button onclick="window.location.href='index.html'">Back to Tracker</button>
-  </div>
+  <header>
+    <h1>AIX SEC OPS - Admin</h1>
+    <div>
+      <button onclick="location.href='index.html'">Back</button>
+      <button id="themeToggle">Dark Mode</button>
+    </div>
+  </header>
 
-  <!-- Login Section -->
-  <div id="login-section">
-    <h3>Admin Login</h3>
-    <input type="text" id="username" placeholder="Username" autocomplete="off" />
-    <input type="password" id="password" placeholder="Password" autocomplete="off" />
-    <button onclick="login()">Login</button>
-  </div>
+  <label>Airline Filter:
+    <select id="airlineFilter">
+      <option value="all">All</option>
+      <option value="IX">IX Only</option>
+      <option value="IXAI">IX + AI</option>
+    </select>
+  </label>
 
-  <!-- Admin Flight Table -->
-  <div id="admin-section" class="hidden">
-    <label>Filter:
-      <select id="airlineFilter" onchange="loadFlights()">
-        <option value="all">All</option>
-        <option value="ix">IX Only</option>
-        <option value="ixai">IX + AI</option>
-      </select>
-    </label>
-
-    <table id="admin-table">
-      <thead>
-        <tr>
-          <th>Flight</th>
-          <th>Reg</th>
-          <th>From</th>
-          <th>To</th>
-          <th>STA/STD</th>
-          <th>Status</th>
-          <th>Bay</th>
-          <th>Belt</th>
-          <th>Save</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+  <table>
+    <thead>
+      <tr><th>Flight</th><th>From/To</th><th>ETA/ETD</th><th>STA/STD</th><th>A/C Type</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th><th>Update</th></tr>
+    </thead>
+    <tbody id="flights-table"><tr><td colspan="10">Loading...</td></tr></tbody>
+  </table>
 
   <script>
-    const API_BASE = 'https://your-backend-url.onrender.com'; // Replace with your backend
-    let dataCache = [];
+    const API_BASE = 'https://kittu-0wb2.onrender.com';
+    const activeAirlines = ["IX", "AK", "FD", "FZ", "UL", "J9"];
 
-    function login() {
-      const u = document.getElementById("username").value.trim();
-      const p = document.getElementById("password").value.trim();
-      if (u === "Aswin" && p === "admin") {
-        document.getElementById("login-section").style.display = "none";
-        document.getElementById("admin-section").classList.remove("hidden");
-        loadFlights();
-      } else {
-        alert("Invalid login!");
-      }
+    // Dark mode toggle
+    const themeToggle = document.getElementById('themeToggle');
+    themeToggle.onclick = () => {
+      document.body.classList.toggle('dark');
+      themeToggle.textContent = document.body.classList.contains('dark') ? 'Light Mode' : 'Dark Mode';
+      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+    };
+    if(localStorage.getItem('theme') === 'dark') {
+      document.body.classList.add('dark');
+      themeToggle.textContent = 'Light Mode';
+    }
+
+    function filterFlight(flightNo) {
+      const filter = document.getElementById('airlineFilter').value;
+      if (filter === "IX") return flightNo.startsWith("IX");
+      if (filter === "IXAI") return flightNo.startsWith("IX") || flightNo.startsWith("AI");
+      return activeAirlines.includes(flightNo.slice(0, 2));
+    }
+
+    function toTime(ts) {
+      return ts ? new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : "-";
     }
 
     async function loadFlights() {
-      const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
-      const flights = await res.json();
-      dataCache = flights;
-      const filter = document.getElementById('airlineFilter').value;
+      const tbody = document.getElementById('flights-table');
+      tbody.innerHTML = "";
+      // Load arrivals and departures for admin in a single list
+      const [arrRes, depRes] = await Promise.all([
+        fetch(`${API_BASE}/flights?mode=arrivals`),
+        fetch(`${API_BASE}/flights?mode=departures`)
+      ]);
+      const arrivals = await arrRes.json();
+      const departures = await depRes.json();
 
-      const filtered = flights.filter(f => {
-        const prefix = f.flight.slice(0, 2);
-        if (filter === 'ix') return prefix === 'IX';
-        if (filter === 'ixai') return ['IX', 'AI'].includes(prefix);
-        return ['IX', 'AK', 'FD', 'FZ', 'UL', 'J9'].includes(prefix);
-      });
+      // Combine for admin view
+      const flights = [...arrivals, ...departures]
+        .filter(f => filterFlight(f.flight))
+        .sort((a,b) => (a.std || 0) - (b.std || 0));
 
-      const tbody = document.querySelector("#admin-table tbody");
-      tbody.innerHTML = '';
+      if(flights.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='10'>No flights found</td></tr>";
+        return;
+      }
 
-      filtered.forEach(f => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
+      flights.forEach(f => {
+        tbody.innerHTML += `<tr>
           <td>${f.flight}</td>
+          <td>${f.from || f.to}</td>
+          <td>${toTime(f.eta)}</td>
+          <td>${toTime(f.std)}</td>
+          <td>${f.model || '-'}</td>
           <td>${f.reg}</td>
-          <td>${f.from}</td>
-          <td>${f.to}</td>
-          <td>${new Date((f.std || f.eta) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
           <td>${f.status}</td>
-          <td><input type="text" id="bay-${f.flight}" value="${f.bay || ''}" /></td>
-          <td><input type="text" id="belt-${f.flight}" value="${f.belt || ''}" /></td>
-          <td><button onclick="saveBayBelt('${f.flight}')">Save</button></td>
-        `;
-        tbody.appendChild(row);
+          <td><input type="text" value="${f.bay || ''}" id="bay-${f.flight}" /></td>
+          <td><input type="text" value="${f.belt || ''}" id="belt-${f.flight}" /></td>
+          <td><button onclick="updateBayBelt('${f.flight}')">Save</button></td>
+        </tr>`;
       });
     }
 
-    async function saveBayBelt(flight) {
-      const bay = document.getElementById(`bay-${flight}`).value;
-      const belt = document.getElementById(`belt-${flight}`).value;
-      await fetch(`${API_BASE}/update-baybelt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flight, bay, belt })
-      });
-      alert(`Updated bay/belt for ${flight}`);
+    async function updateBayBelt(flight) {
+      const bay = document.getElementById(`bay-${flight}`).value.trim();
+      const belt = document.getElementById(`belt-${flight}`).value.trim();
+
+      const username = prompt("Admin username:");
+      const password = prompt("Admin password:");
+
+      if(username !== "Aswin" || password !== "admin") {
+        alert("Invalid credentials");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ flight, bay, belt }),
+          credentials: 'include',
+          mode: 'cors',
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Basic " + btoa(`${username}:${password}`)
+          },
+        });
+        const data = await res.json();
+        if(data.success) {
+          alert(`Updated bay & belt for ${flight}`);
+        } else {
+          alert(`Update failed: ${data.error || "Unknown error"}`);
+        }
+      } catch (e) {
+        alert("Network error");
+      }
     }
+
+    document.getElementById('airlineFilter').onchange = loadFlights;
+
+    loadFlights();
+    setInterval(loadFlights, 30000);
   </script>
 </body>
 </html>
