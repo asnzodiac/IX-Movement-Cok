@@ -3,151 +3,120 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AIX SEC OPS - Admin</title>
+  <title>AIX SEC OPS - Admin Panel</title>
   <style>
-    body { font-family: Arial; margin: 20px; background: #fff; color: #000; transition: background-color 0.3s, color 0.3s;}
-    body.dark { background: #121212; color: #ddd; }
+    body { font-family: Arial; margin: 20px; }
     header { display: flex; justify-content: space-between; align-items: center; }
-    button { cursor: pointer; padding: 6px 12px; margin-left: 10px; border-radius: 4px; border:none; background:#007bff; color:#fff; }
-    button:hover { background:#0056b3; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background: #f2f2f2; }
-    body.dark th { background: #333; }
-    input[type=text] { width: 100%; padding: 6px; box-sizing: border-box; }
-    .status-green { color: green; }
-    .status-orange { color: orange; }
-    .status-red { color: red; }
-    label { margin-right: 10px; }
+    input[type="text"] { width: 80px; }
+    button { padding: 5px 10px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>AIX SEC OPS - Admin</h1>
-    <div>
-      <button onclick="location.href='index.html'">Back</button>
-      <button id="themeToggle">Dark Mode</button>
-    </div>
+    <h1>Admin Panel</h1>
+    <button onclick="location.href='index.html'">Back to Tracker</button>
   </header>
-
-  <label>Airline Filter:
-    <select id="airlineFilter">
-      <option value="all">All</option>
-      <option value="IX">IX Only</option>
-      <option value="IXAI">IX + AI</option>
-    </select>
-  </label>
 
   <table>
     <thead>
-      <tr><th>Flight</th><th>From/To</th><th>ETA/ETD</th><th>STA/STD</th><th>A/C Type</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th><th>Update</th></tr>
+      <tr>
+        <th>Flight</th>
+        <th>Bay</th>
+        <th>Belt</th>
+        <th>Update</th>
+      </tr>
     </thead>
-    <tbody id="flights-table"><tr><td colspan="10">Loading...</td></tr></tbody>
+    <tbody id="admin-table">
+      <tr><td colspan="4">Loading flights...</td></tr>
+    </tbody>
   </table>
 
   <script>
-    const API_BASE = 'https://kittu-0wb2.onrender.com';
-    const activeAirlines = ["IX", "AK", "FD", "FZ", "UL", "J9"];
+    const API_BASE = "https://kittu-0wb2.onrender.com";
+    const username = "Aswin";
+    const password = "admin";
 
-    // Dark mode toggle
-    const themeToggle = document.getElementById('themeToggle');
-    themeToggle.onclick = () => {
-      document.body.classList.toggle('dark');
-      themeToggle.textContent = document.body.classList.contains('dark') ? 'Light Mode' : 'Dark Mode';
-      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
-    };
-    if(localStorage.getItem('theme') === 'dark') {
-      document.body.classList.add('dark');
-      themeToggle.textContent = 'Light Mode';
-    }
+    async function fetchFlights() {
+      try {
+        const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
+        const flights = await res.json();
 
-    function filterFlight(flightNo) {
-      const filter = document.getElementById('airlineFilter').value;
-      if (filter === "IX") return flightNo.startsWith("IX");
-      if (filter === "IXAI") return flightNo.startsWith("IX") || flightNo.startsWith("AI");
-      return activeAirlines.includes(flightNo.slice(0, 2));
-    }
+        const tbody = document.getElementById("admin-table");
+        tbody.innerHTML = "";
 
-    function toTime(ts) {
-      return ts ? new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : "-";
-    }
+        flights.forEach(flight => {
+          const row = document.createElement("tr");
 
-    async function loadFlights() {
-      const tbody = document.getElementById('flights-table');
-      tbody.innerHTML = "";
-      // Load arrivals and departures for admin in a single list
-      const [arrRes, depRes] = await Promise.all([
-        fetch(`${API_BASE}/flights?mode=arrivals`),
-        fetch(`${API_BASE}/flights?mode=departures`)
-      ]);
-      const arrivals = await arrRes.json();
-      const departures = await depRes.json();
+          // Flight number cell
+          const flightCell = document.createElement("td");
+          flightCell.textContent = flight.flight || "-";
 
-      // Combine for admin view
-      const flights = [...arrivals, ...departures]
-        .filter(f => filterFlight(f.flight))
-        .sort((a,b) => (a.std || 0) - (b.std || 0));
+          // Bay input cell
+          const bayCell = document.createElement("td");
+          const bayInput = document.createElement("input");
+          bayInput.type = "text";
+          bayInput.value = flight.bay || "";
+          bayCell.appendChild(bayInput);
 
-      if(flights.length === 0) {
-        tbody.innerHTML = "<tr><td colspan='10'>No flights found</td></tr>";
-        return;
+          // Belt input cell
+          const beltCell = document.createElement("td");
+          const beltInput = document.createElement("input");
+          beltInput.type = "text";
+          beltInput.value = flight.belt || "";
+          beltCell.appendChild(beltInput);
+
+          // Update button cell
+          const updateCell = document.createElement("td");
+          const updateBtn = document.createElement("button");
+          updateBtn.textContent = "Update";
+          updateBtn.onclick = () => updateBayBelt(flight.flight, bayInput.value, beltInput.value);
+          updateCell.appendChild(updateBtn);
+
+          // Append cells to row
+          row.appendChild(flightCell);
+          row.appendChild(bayCell);
+          row.appendChild(beltCell);
+          row.appendChild(updateCell);
+
+          tbody.appendChild(row);
+        });
+      } catch (err) {
+        alert("Failed to load flights: " + err.message);
+        console.error(err);
       }
-
-      flights.forEach(f => {
-        tbody.innerHTML += `<tr>
-          <td>${f.flight}</td>
-          <td>${f.from || f.to}</td>
-          <td>${toTime(f.eta)}</td>
-          <td>${toTime(f.std)}</td>
-          <td>${f.model || '-'}</td>
-          <td>${f.reg}</td>
-          <td>${f.status}</td>
-          <td><input type="text" value="${f.bay || ''}" id="bay-${f.flight}" /></td>
-          <td><input type="text" value="${f.belt || ''}" id="belt-${f.flight}" /></td>
-          <td><button onclick="updateBayBelt('${f.flight}')">Save</button></td>
-        </tr>`;
-      });
     }
 
-    async function updateBayBelt(flight) {
-      const bay = document.getElementById(`bay-${flight}`).value.trim();
-      const belt = document.getElementById(`belt-${flight}`).value.trim();
-
-      const username = prompt("Admin username:");
-      const password = prompt("Admin password:");
-
-      if(username !== "Aswin" || password !== "admin") {
-        alert("Invalid credentials");
-        return;
-      }
-
+    async function updateBayBelt(flight, bay, belt) {
       try {
         const res = await fetch(`${API_BASE}/update`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ flight, bay, belt }),
-          credentials: 'include',
-          mode: 'cors',
           headers: {
             "Content-Type": "application/json",
             "Authorization": "Basic " + btoa(`${username}:${password}`)
           },
+          body: JSON.stringify({ flight, bay, belt }),
+          mode: "cors"
         });
-        const data = await res.json();
-        if(data.success) {
-          alert(`Updated bay & belt for ${flight}`);
+
+        if (res.ok) {
+          alert(`Updated bay and belt for flight ${flight}`);
+        } else if (res.status === 401) {
+          alert("Unauthorized: Please check your username and password.");
         } else {
-          alert(`Update failed: ${data.error || "Unknown error"}`);
+          const errorData = await res.json();
+          alert("Update failed: " + (errorData.error || "Unknown error"));
         }
-      } catch (e) {
-        alert("Network error");
+      } catch (err) {
+        alert("Network error: " + err.message);
+        console.error(err);
       }
     }
 
-    document.getElementById('airlineFilter').onchange = loadFlights;
-
-    loadFlights();
-    setInterval(loadFlights, 30000);
+    // Load flights on page load
+    fetchFlights();
   </script>
 </body>
 </html>
