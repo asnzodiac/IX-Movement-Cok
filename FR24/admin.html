@@ -2,115 +2,142 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin - AIX SEC OPS</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial; padding: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background: #f0f0f0; }
-    .status-green { color: green; }
-    .status-orange { color: orange; }
-    .status-red { color: red; }
-    .btn { padding: 5px 10px; cursor: pointer; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f9f9f9;
+    }
+    h2 {
+      margin-bottom: 10px;
+    }
+    input, select, button {
+      margin: 5px;
+      padding: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    .hidden {
+      display: none;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
-  <h2>Admin Panel - Edit Bay & Belt</h2>
-  <button onclick="window.location.href='index.html'">Back to Main</button>
+  <div class="top-bar">
+    <h2>AIX Admin Panel</h2>
+    <button onclick="window.location.href='index.html'">Back to Tracker</button>
+  </div>
 
-  <label for="airlineFilter"><strong>Filter:</strong></label>
-  <select id="airlineFilter">
-    <option value="all">All</option>
-    <option value="IX">IX Only</option>
-    <option value="IXAI">IX + AI</option>
-  </select>
+  <!-- Login Section -->
+  <div id="login-section">
+    <h3>Admin Login</h3>
+    <input type="text" id="username" placeholder="Username" autocomplete="off" />
+    <input type="password" id="password" placeholder="Password" autocomplete="off" />
+    <button onclick="login()">Login</button>
+  </div>
 
-  <table id="adminTable">
-    <thead>
-      <tr>
-        <th>Flight</th>
-        <th>Reg</th>
-        <th>From</th>
-        <th>STA</th>
-        <th>ETA</th>
-        <th>Aircraft</th>
-        <th>Status</th>
-        <th>Bay</th>
-        <th>Belt</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td colspan="10">Loading...</td></tr>
-    </tbody>
-  </table>
+  <!-- Admin Flight Table -->
+  <div id="admin-section" class="hidden">
+    <label>Filter:
+      <select id="airlineFilter" onchange="loadFlights()">
+        <option value="all">All</option>
+        <option value="ix">IX Only</option>
+        <option value="ixai">IX + AI</option>
+      </select>
+    </label>
+
+    <table id="admin-table">
+      <thead>
+        <tr>
+          <th>Flight</th>
+          <th>Reg</th>
+          <th>From</th>
+          <th>To</th>
+          <th>STA/STD</th>
+          <th>Status</th>
+          <th>Bay</th>
+          <th>Belt</th>
+          <th>Save</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
   <script>
-    const API = "https://kittu-0wb2.onrender.com";  // Change to your backend URL if different
-    const toTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+    const API_BASE = 'https://your-backend-url.onrender.com'; // Replace with your backend
+    let dataCache = [];
 
-    function airlineFilterMatch(flt, filter) {
-      const prefix = flt.flight.slice(0, 2);
-      if (filter === "IX") return prefix === "IX";
-      if (filter === "IXAI") return ["IX", "AI"].includes(prefix);
-      return ["IX", "AK", "FD", "FZ", "J9", "UL"].includes(prefix);
+    function login() {
+      const u = document.getElementById("username").value.trim();
+      const p = document.getElementById("password").value.trim();
+      if (u === "Aswin" && p === "admin") {
+        document.getElementById("login-section").style.display = "none";
+        document.getElementById("admin-section").classList.remove("hidden");
+        loadFlights();
+      } else {
+        alert("Invalid login!");
+      }
     }
 
     async function loadFlights() {
-      const res = await fetch(`${API}/flights?mode=arrivals`);
+      const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
       const flights = await res.json();
-      const filter = document.getElementById("airlineFilter").value;
-      const tbody = document.querySelector("#adminTable tbody");
-      tbody.innerHTML = "";
+      dataCache = flights;
+      const filter = document.getElementById('airlineFilter').value;
 
-      flights.filter(f => airlineFilterMatch(f, filter)).forEach(f => {
-        const row = document.createElement("tr");
+      const filtered = flights.filter(f => {
+        const prefix = f.flight.slice(0, 2);
+        if (filter === 'ix') return prefix === 'IX';
+        if (filter === 'ixai') return ['IX', 'AI'].includes(prefix);
+        return ['IX', 'AK', 'FD', 'FZ', 'UL', 'J9'].includes(prefix);
+      });
+
+      const tbody = document.querySelector("#admin-table tbody");
+      tbody.innerHTML = '';
+
+      filtered.forEach(f => {
+        const row = document.createElement('tr');
         row.innerHTML = `
           <td>${f.flight}</td>
           <td>${f.reg}</td>
           <td>${f.from}</td>
-          <td>${toTime(f.std)}</td>
-          <td>${toTime(f.eta)}</td>
-          <td>${f.type || '-'}</td>
+          <td>${f.to}</td>
+          <td>${new Date((f.std || f.eta) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
           <td>${f.status}</td>
-          <td><input type="text" value="${f.bay || ''}" size="4" id="bay-${f.flight}"></td>
-          <td><input type="text" value="${f.belt || ''}" size="4" id="belt-${f.flight}"></td>
-          <td><button class="btn" onclick="save('${f.flight}')">Save</button></td>
+          <td><input type="text" id="bay-${f.flight}" value="${f.bay || ''}" /></td>
+          <td><input type="text" id="belt-${f.flight}" value="${f.belt || ''}" /></td>
+          <td><button onclick="saveBayBelt('${f.flight}')">Save</button></td>
         `;
         tbody.appendChild(row);
       });
     }
 
-    async function save(flight) {
+    async function saveBayBelt(flight) {
       const bay = document.getElementById(`bay-${flight}`).value;
       const belt = document.getElementById(`belt-${flight}`).value;
-
-      const password = prompt("Enter admin password:");
-      if (password !== "admin") {
-        alert("Incorrect password!");
-        return;
-      }
-
-      const res = await fetch(`${API}/update-baybelt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ flight, bay, belt, password })
+      await fetch(`${API_BASE}/update-baybelt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flight, bay, belt })
       });
-
-      const result = await res.json();
-      if (res.ok) {
-        alert("Saved!");
-        loadFlights();
-      } else {
-        alert(result.error || "Failed to update.");
-      }
+      alert(`Updated bay/belt for ${flight}`);
     }
-
-    document.getElementById("airlineFilter").addEventListener("change", loadFlights);
-
-    loadFlights();
-    setInterval(loadFlights, 30000);
   </script>
 </body>
 </html>
