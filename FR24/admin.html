@@ -2,69 +2,64 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Panel</title>
+  <title>Admin – Bay/Belt Editor</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background-color: #eee; }
+    body { font-family: sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    th { background: #333; color: white; }
+    input[type="text"] { width: 80px; }
+    #backBtn { float: right; background: #555; color: white; border: none; padding: 6px 10px; border-radius: 4px; }
   </style>
 </head>
 <body>
-  <h1>Update Bay & Belt</h1>
-  <div><label>Username: <input id="username" /></label> <label>Password: <input type="password" id="password" /></label>
-  <button onclick="login()">Login</button></div>
-  <br />
-  <table>
-    <thead><tr><th>Flight</th><th>STA/STD</th><th>Bay</th><th>Belt</th></tr></thead>
-    <tbody id="adminTable"></tbody>
+  <h2>
+    Admin Panel – Bay & Belt
+    <button id="backBtn" onclick="location.href='index.html'">Back</button>
+  </h2>
+  <table id="adminTable">
+    <thead><tr>
+      <th>Flight</th><th>From</th><th>ETA</th><th>Status</th><th>Bay</th><th>Belt</th><th>Save</th>
+    </tr></thead>
+    <tbody></tbody>
   </table>
-  <button onclick="submit()">Save Changes</button>
+
   <script>
-    let auth = { user: "", pass: "" };
-    let allData = [];
-
-    function login() {
-      auth.user = document.getElementById("username").value;
-      auth.pass = document.getElementById("password").value;
-      fetchData();
+    const API_BASE = "https://kittu-0wb2.onrender.com";
+    async function loadFlights() {
+      const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
+      const data = await res.json();
+      const tbody = document.querySelector("#adminTable tbody");
+      tbody.innerHTML = "";
+      data.forEach(f => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${f.flight}</td><td>${f.from}</td><td>${new Date(f.eta * 1000).toLocaleTimeString()}</td><td>${f.status}</td>
+          <td><input type="text" value="${f.bay}" id="bay-${f.flight}"></td>
+          <td><input type="text" value="${f.belt}" id="belt-${f.flight}"></td>
+          <td><button onclick="save('${f.flight}')">Save</button></td>
+        `;
+        tbody.appendChild(row);
+      });
     }
 
-    function fetchData() {
-      fetch("https://kittu-0wb2.onrender.com/flights?mode=arrivals")
-        .then(res => res.json())
-        .then(data => {
-          allData = data;
-          const tbody = document.getElementById("adminTable");
-          tbody.innerHTML = "";
-          data.forEach((f, i) => {
-            const row = document.createElement("tr");
-            const std = f.std ? new Date(f.std * 1000).toLocaleTimeString() : "-";
-            row.innerHTML = `
-              <td>${f.flight}</td>
-              <td>${std}</td>
-              <td><input value="${f.bay || ""}" onchange="allData[${i}].bay = this.value" /></td>
-              <td><input value="${f.belt || ""}" onchange="allData[${i}].belt = this.value" /></td>
-            `;
-            tbody.appendChild(row);
-          });
-        });
-    }
-
-    function submit() {
-      fetch("https://kittu-0wb2.onrender.com/update-baybelt", {
+    function save(flight) {
+      const bay = document.getElementById(`bay-${flight}`).value;
+      const belt = document.getElementById(`belt-${flight}`).value;
+      fetch(`${API_BASE}/update`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Basic " + btoa(auth.user + ":" + auth.pass)
+          "Authorization": "Basic " + btoa("Aswin:admin")
         },
-        body: JSON.stringify(allData.filter(f => f.bay || f.belt))
-      }).then(res => {
-        if (res.ok) alert("Bay/Belt updated!");
-        else alert("Unauthorized or failed.");
+        body: JSON.stringify({ flight, bay, belt })
+      }).then(r => {
+        if (r.ok) alert("Saved!");
+        else alert("Failed!");
       });
     }
+
+    loadFlights();
   </script>
 </body>
 </html>
