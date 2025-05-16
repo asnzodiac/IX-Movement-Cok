@@ -1,65 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Admin – Bay/Belt Editor</title>
+  <meta charset="UTF-8" />
+  <title>AIX SEC OPS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-    th { background: #333; color: white; }
-    input[type="text"] { width: 80px; }
-    #backBtn { float: right; background: #555; color: white; border: none; padding: 6px 10px; border-radius: 4px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #333; color: white; position: sticky; top: 0; }
+    .delayed { background: #fff0f0; }
+    .followed { font-weight: bold; background: #e0f7fa; }
+    .section { margin-bottom: 50px; }
+    #adminBtn { float: right; padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
   </style>
 </head>
 <body>
   <h2>
-    Admin Panel – Bay & Belt
-    <button id="backBtn" onclick="location.href='index.html'">Back</button>
+    AIX SEC OPS
+    <button id="adminBtn" onclick="location.href='admin.html'">Admin</button>
   </h2>
-  <table id="adminTable">
-    <thead><tr>
-      <th>Flight</th><th>From</th><th>ETA</th><th>Status</th><th>Bay</th><th>Belt</th><th>Save</th>
-    </tr></thead>
-    <tbody></tbody>
-  </table>
+
+  <div>
+    Airline Filter:
+    <select id="airlineFilter">
+      <option value="all">All</option>
+      <option value="ix">IX Only</option>
+      <option value="ixai">IX + AI</option>
+    </select>
+    Sort by:
+    <select id="sortOption">
+      <option value="scheduled" selected>STA / STD</option>
+      <option value="estimated">ETA / ETD</option>
+    </select>
+  </div>
+
+  <div class="section" id="arrivals-section">
+    <h3>Arrivals</h3>
+    <table id="arrivalsTable"><thead><tr>
+      <th>Flight</th><th>From</th><th>ETA</th><th>STA</th><th>Reg</th><th>Aircraft</th><th>Status</th><th>Bay</th><th>Belt</th><th>Follow</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="section" id="departures-section">
+    <h3>Departures</h3>
+    <table id="departuresTable"><thead><tr>
+      <th>Flight</th><th>To</th><th>ETD</th><th>STD</th><th>Reg</th><th>Aircraft</th><th>Status</th><th>Bay</th><th>Belt</th><th>Follow</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="section" id="turnaround-section">
+    <h3>Turnaround</h3>
+    <table id="turnaroundTable"><thead><tr>
+      <th>Flight (Arr / Dep)</th><th>Reg</th><th>STA</th><th>STD</th><th>Status</th><th>Bay</th><th>Belt</th>
+    </tr></thead><tbody></tbody></table>
+  </div>
 
   <script>
-    const API_BASE = "https://kittu-0wb2.onrender.com";
-    async function loadFlights() {
-      const res = await fetch(`${API_BASE}/flights?mode=arrivals`);
-      const data = await res.json();
-      const tbody = document.querySelector("#adminTable tbody");
+    const API_BASE = "https://kittu-0wb2.onrender.com"; // Change to your backend URL
+    let followedFlights = JSON.parse(localStorage.getItem("followedFlights") || "[]");
+
+    const sortFlights = (flights, key) => flights.sort((a, b) => (a[key] || 0) - (b[key] || 0));
+
+    const applyFilter = (flight) => {
+      const filter = document.getElementById("airlineFilter").value;
+      const prefix = flight.flight.slice(0, 2);
+      if (filter === "ix") return prefix === "IX";
+      if (filter === "ixai") return ["IX", "AI"].includes(prefix);
+      return ["IX", "AI", "UL", "AK", "FD", "FZ", "J9"].includes(prefix);
+    };
+
+    const renderTable = (flights, tableId, type) => {
+      const sortKey = document.getElementById("sortOption").value === "estimated" ? "eta" : "std";
+      const tbody = document.querySelector(`#${tableId} tbody`);
       tbody.innerHTML = "";
-      data.forEach(f => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${f.flight}</td><td>${f.from}</td><td>${new Date(f.eta * 1000).toLocaleTimeString()}</td><td>${f.status}</td>
-          <td><input type="text" value="${f.bay}" id="bay-${f.flight}"></td>
-          <td><input type="text" value="${f.belt}" id="belt-${f.flight}"></td>
-          <td><button onclick="save('${f.flight}')">Save</button></td>
+      sortFlights(flights.filter(applyFilter), sortKey).forEach(f => {
+        const isFollowed = followedFlights.includes(f.flight);
+        const timeNow = Math.floor(Date.now() / 1000);
+        const etaMins = Math.round((f.eta - timeNow) / 60);
+        if (isFollowed && etaMins <= 15 && etaMins > 0) notifyFlight(f);
+
+        const tr = document.createElement("tr");
+        if (isFollowed) tr.classList.add("followed");
+        tr.innerHTML = type === "arrivals" ? `
+          <td>${f.flight}</td><td>${f.from}</td><td>${formatTime(f.eta)}</td><td>${formatTime(f.std)}</td>
+          <td>${f.reg}</td><td>${f.model}</td><td>${f.status}</td><td>${f.bay}</td><td>${f.belt}</td>
+          <td><input type="checkbox" ${isFollowed ? "checked" : ""} onchange="toggleFollow('${f.flight}', this.checked)"></td>
+        ` : `
+          <td>${f.flight}</td><td>${f.to}</td><td>${formatTime(f.eta)}</td><td>${formatTime(f.std)}</td>
+          <td>${f.reg}</td><td>${f.model}</td><td>${f.status}</td><td>${f.bay}</td><td>${f.belt}</td>
+          <td><input type="checkbox" ${isFollowed ? "checked" : ""} onchange="toggleFollow('${f.flight}', this.checked)"></td>
         `;
-        tbody.appendChild(row);
+        tbody.appendChild(tr);
+      });
+    };
+
+    const formatTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "-";
+
+    function toggleFollow(flight, checked) {
+      if (checked) followedFlights.push(flight);
+      else followedFlights = followedFlights.filter(f => f !== flight);
+      localStorage.setItem("followedFlights", JSON.stringify(followedFlights));
+    }
+
+    function notifyFlight(f) {
+      if (Notification.permission === "granted") {
+        navigator.serviceWorker.getRegistration().then(reg => {
+          if (reg) reg.showNotification(`Flight ${f.flight}`, {
+            body: `ETA in ${Math.round((f.eta - Date.now() / 1000) / 60)} mins`,
+            icon: "icon-192.png"
+          });
+        });
+      }
+    }
+
+    async function fetchAllFlights() {
+      const [arr, dep] = await Promise.all([
+        fetch(`${API_BASE}/flights?mode=arrivals`).then(r => r.json()),
+        fetch(`${API_BASE}/flights?mode=departures`).then(r => r.json())
+      ]);
+
+      renderTable(arr, "arrivalsTable", "arrivals");
+      renderTable(dep, "departuresTable", "departures");
+      renderTurnaround(arr, dep);
+    }
+
+    function renderTurnaround(arrivals, departures) {
+      const tbody = document.querySelector("#turnaroundTable tbody");
+      tbody.innerHTML = "";
+      const arrMap = {};
+      arrivals.forEach(f => { if (f.reg) arrMap[f.reg] = f; });
+
+      departures.forEach(dep => {
+        const arr = arrMap[dep.reg];
+        if (arr) {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${arr.flight} / ${dep.flight}</td><td>${dep.reg}</td>
+            <td>${formatTime(arr.std)}</td><td>${formatTime(dep.std)}</td>
+            <td>${dep.status}</td><td>${dep.bay}</td><td>${dep.belt}</td>
+          `;
+          tbody.appendChild(row);
+        }
       });
     }
 
-    function save(flight) {
-      const bay = document.getElementById(`bay-${flight}`).value;
-      const belt = document.getElementById(`belt-${flight}`).value;
-      fetch(`${API_BASE}/update`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Basic " + btoa("Aswin:admin")
-        },
-        body: JSON.stringify({ flight, bay, belt })
-      }).then(r => {
-        if (r.ok) alert("Saved!");
-        else alert("Failed!");
-      });
+    document.getElementById("airlineFilter").addEventListener("change", fetchAllFlights);
+    document.getElementById("sortOption").addEventListener("change", fetchAllFlights);
+
+    if ("Notification" in window && Notification.permission !== "granted") {
+      Notification.requestPermission();
     }
 
-    loadFlights();
+    fetchAllFlights();
+    setInterval(fetchAllFlights, 30000);
   </script>
 </body>
 </html>
