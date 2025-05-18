@@ -1,122 +1,140 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flight Tracker</title>
-  <link rel="stylesheet" href="style.css" />
-  <script defer src="script.js"></script>
+  <title>AIX Tracker</title>
+  <style>
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }
+    th { background: #eee; }
+    button { padding: 6px 12px; margin-bottom: 10px; }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Flight Tracker</h1>
-  </header>
+  <h1>AIX Tracker</h1>
 
-  <main>
-    <section id="departures-section">
-      <h2>Departures</h2>
-      <table id="departures-table">
-        <thead>
-          <tr>
-            <th>Flight</th>
-            <th>To</th>
-            <th>STD</th>
-            <th>ETA</th>
-            <th>ATD</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
+  <section>
+    <h2>Arrivals</h2>
+    <button onclick="loadEarlier('arrivals')">Load Earlier Arrivals</button>
+    <table id="arrivals-table">
+      <thead><tr><th>Flight</th><th>From</th><th>ETA</th><th>STA</th><th>Reg</th><th>Aircraft</th><th>Status</th></tr></thead>
+      <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
+    </table>
+  </section>
 
-    <section id="turnaround-section">
-      <h2>Turnaround</h2>
-      <table id="turnaround-table">
-        <thead>
-          <tr>
-            <th>Flight (Arrival)</th>
-            <th>From</th>
-            <th>ETA</th>
-            <th>Status</th>
-            <th>Flight (Departure)</th>
-            <th>To</th>
-            <th>STD</th>
-            <th>ATD</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </main>
+  <section>
+    <h2>Departures</h2>
+    <button onclick="loadEarlier('departures')">Load Earlier Departures</button>
+    <table id="departures-table">
+      <thead><tr><th>Flight</th><th>To</th><th>ETD</th><th>STD</th><th>ATD</th><th>Reg</th><th>Aircraft</th><th>Status</th></tr></thead>
+      <tbody><tr><td colspan="8">Loading...</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Turnaround</h2>
+    <table id="turnaround-table">
+      <thead><tr><th>Arr / Dep</th><th>Reg</th><th>STA / STD</th><th>Route</th><th>Aircraft</th><th>Status</th><th>ATD</th></tr></thead>
+      <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
+    </table>
+  </section>
 
   <script>
+    const API_BASE = "/flights";
     const SERPAPI_KEY = "e68e2dff18aea3576dc576b2e3ef1bbdd403cf42d69a7b47a30f6c755effe412";
+    let timestamps = {
+      arrivals: Math.floor(Date.now() / 1000),
+      departures: Math.floor(Date.now() / 1000)
+    };
+
+    const formatTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
 
     async function fetchATD(flightNo) {
-      const url = `https://serpapi.com/search.json?q=${flightNo}+flight+ATD&engine=google&api_key=${SERPAPI_KEY}`;
       try {
-        const res = await fetch(url);
+        const res = await fetch(`/search-atd?flight=${flightNo}`);
         const data = await res.json();
-        const snippet = data.organic_results?.[0]?.snippet || "";
+        const snippet = data.results?.[0] || "";
         const match = snippet.match(/(\d{1,2}:\d{2})\s*(AM|PM)?/i);
-        return match ? match[0] : "";
+        return match ? match[0] : "-";
       } catch {
-        return "";
+        return "-";
       }
     }
 
-    async function loadDepartures() {
-      const res = await fetch("/flights?mode=departures");
-      const flights = await res.json();
-      const tbody = document.querySelector("#departures-table tbody");
-      tbody.innerHTML = "";
+    async function loadFlights(mode, append = false) {
+      const ts = timestamps[mode];
+      const res = await fetch(`${API_BASE}?mode=${mode}&ts=${ts}`);
+      const data = await res.json();
+      const tableId = `${mode}-table`;
+      const tbody = document.getElementById(tableId).querySelector("tbody");
+      if (!append) tbody.innerHTML = "";
 
-      for (const f of flights) {
-        const row = document.createElement("tr");
-        const atd = await fetchATD(f.flight);
-        row.innerHTML = `
-          <td>${f.flight}</td>
-          <td>${f.to}</td>
-          <td>${new Date(f.std * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-          <td>${new Date(f.eta * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-          <td>${atd}</td>
-          <td>${f.status}</td>
-        `;
-        tbody.appendChild(row);
+      for (const f of data) {
+        const tr = document.createElement("tr");
+        if (mode === "arrivals") {
+          tr.innerHTML = `
+            <td>${f.flight}</td><td>${f.from}</td><td>${formatTime(f.eta)}</td>
+            <td>${formatTime(f.std)}</td><td>${f.reg}</td><td>${f.model}</td><td>${f.status}</td>
+          `;
+        } else {
+          const atdId = `atd-${f.flight}-${ts}`;
+          tr.innerHTML = `
+            <td>${f.flight}</td><td>${f.to}</td><td>${formatTime(f.eta)}</td>
+            <td>${formatTime(f.std)}</td><td id="${atdId}">Loading...</td>
+            <td>${f.reg}</td><td>${f.model}</td><td>${f.status}</td>
+          `;
+          fetchATD(f.flight).then(atd => {
+            const el = document.getElementById(atdId);
+            if (el) el.textContent = atd;
+          });
+        }
+        tbody.appendChild(tr);
       }
+
+      timestamps[mode] -= 7200; // subtract 2 hours for next load
     }
 
     async function loadTurnaround() {
-      const arr = await fetch("/flights?mode=arrivals").then(res => res.json());
-      const dep = await fetch("/flights?mode=departures").then(res => res.json());
-      const tbody = document.querySelector("#turnaround-table tbody");
+      const arr = await fetch(`${API_BASE}?mode=arrivals`).then(res => res.json());
+      const dep = await fetch(`${API_BASE}?mode=departures`).then(res => res.json());
+      const tbody = document.getElementById("turnaround-table").querySelector("tbody");
       tbody.innerHTML = "";
 
       for (const a of arr) {
-        const d = dep.find(x => x.reg === a.reg);
-        if (!d) continue;
+        const match = dep.find(d => d.reg === a.reg && d.std > a.std && d.std - a.std <= 7200);
+        if (!match) continue;
 
-        const atd = await fetchATD(d.flight);
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${a.flight}</td>
-          <td>${a.from}</td>
-          <td>${new Date(a.eta * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-          <td>${a.status}</td>
-          <td>${d.flight}</td>
-          <td>${d.to}</td>
-          <td>${new Date(d.std * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-          <td>${atd}</td>
-          <td>${d.status}</td>
+        const atdId = `turn-atd-${match.flight}`;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${a.flight} / ${match.flight}</td><td>${a.reg}</td>
+          <td>${formatTime(a.std)} / ${formatTime(match.std)}</td>
+          <td>${a.from} - COK - ${match.to}</td><td>${a.model}</td>
+          <td>${a.status} / ${match.status}</td><td id="${atdId}">Loading...</td>
         `;
-        tbody.appendChild(row);
+        tbody.appendChild(tr);
+
+        fetchATD(match.flight).then(atd => {
+          const el = document.getElementById(atdId);
+          if (el) el.textContent = atd;
+        });
       }
     }
 
-    loadDepartures();
+    function loadEarlier(mode) {
+      loadFlights(mode, true);
+    }
+
+    loadFlights("arrivals");
+    loadFlights("departures");
     loadTurnaround();
+    setInterval(() => {
+      loadFlights("arrivals");
+      loadFlights("departures");
+      loadTurnaround();
+    }, 60000);
   </script>
 </body>
 </html>
