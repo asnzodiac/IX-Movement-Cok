@@ -1,3 +1,4 @@
+
 from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
 import requests
@@ -79,6 +80,7 @@ def get_flights():
                 "to": fl.get("airport", {}).get("destination", {}).get("code", {}).get("iata", ""),
                 "eta": fl.get("time", {}).get("estimated", {}).get("arrival" if mode == "arrivals" else "departure", 0),
                 "std": fl.get("time", {}).get("scheduled", {}).get("arrival" if mode == "arrivals" else "departure", 0),
+                "atd": fl.get("time", {}).get("real", {}).get("departure", 0),
                 "status": fl.get("status", {}).get("text", ""),
                 "model": fl.get("aircraft", {}).get("model", {}).get("code", ""),
                 "bay": extra.get("bay", ""),
@@ -87,6 +89,30 @@ def get_flights():
 
         return jsonify(flights)
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/search-atd")
+def search_atd():
+    flight_no = request.args.get("flight", "").upper().strip()
+    if not flight_no:
+        return jsonify({"error": "Missing flight number"}), 400
+
+    try:
+        serpapi_key = "e68e2dff18aea3576dc576b2e3ef1bbdd403cf42d69a7b47a30f6c755effe412"
+        query = f"{flight_no} actual departure time"
+        url = f"https://serpapi.com/search.json?q={query}&engine=google&api_key={serpapi_key}"
+
+        response = requests.get(url)
+        data = response.json()
+
+        results = data.get("organic_results", [])
+        snippets = [r.get("snippet", "") for r in results if "snippet" in r]
+
+        return jsonify({
+            "flight": flight_no,
+            "results": snippets[:5]
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -108,58 +134,6 @@ def update_bay_belt():
     BAY_BELT_STORE[key] = {"bay": bay, "belt": belt}
     save_storage()
     return jsonify({"success": True})
-
-@app.route("/search")
-def search_flight():
-    flight_no = request.args.get("flight", "").upper().strip()
-    if not flight_no:
-        return jsonify([])
-
-    allowed_prefixes = ("IX", "AK", "FD", "FZ", "UL", "J9")
-    if not any(flight_no.startswith(prefix) for prefix in allowed_prefixes):
-        return jsonify([])
-
-    ts = int(time.time())
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    results = []
-
-    for mode in ["arrivals", "departures"]:
-        try:
-            res = requests.get(build_url(mode, ts), headers=HEADERS)
-            res.raise_for_status()
-            flights_raw = (
-                res.json()
-                .get("result", {})
-                .get("response", {})
-                .get("airport", {})
-                .get("pluginData", {})
-                .get("schedule", {})
-                .get(mode, {})
-                .get("data", [])
-            )
-
-            for f in flights_raw:
-                fl = f.get("flight", {})
-                num = fl.get("identification", {}).get("number", {}).get("default", "")
-                if num.upper() == flight_no:
-                    key = get_today_key(num, today)
-                    extra = BAY_BELT_STORE.get(key, {"bay": "", "belt": ""})
-                    results.append({
-                        "flight": num,
-                        "reg": fl.get("aircraft", {}).get("registration", ""),
-                        "from": fl.get("airport", {}).get("origin", {}).get("code", {}).get("iata", ""),
-                        "to": fl.get("airport", {}).get("destination", {}).get("code", {}).get("iata", ""),
-                        "eta": fl.get("time", {}).get("estimated", {}).get("arrival" if mode == "arrivals" else "departure", 0),
-                        "std": fl.get("time", {}).get("scheduled", {}).get("arrival" if mode == "arrivals" else "departure", 0),
-                        "status": fl.get("status", {}).get("text", ""),
-                        "model": fl.get("aircraft", {}).get("model", {}).get("code", ""),
-                        "bay": extra.get("bay", ""),
-                        "belt": extra.get("belt", "")
-                    })
-        except Exception:
-            continue
-
-    return jsonify(results)
 
 @app.route("/")
 def home():
