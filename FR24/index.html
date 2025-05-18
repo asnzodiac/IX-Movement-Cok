@@ -3,240 +3,120 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="icon-192.png" />
-  <title>AIX SEC OPS</title>
-  <style>
-    body { font-family: Arial; margin: 20px; background: #fff; color: #000; transition: background-color 0.3s, color 0.3s;}
-    body.dark { background: #121212; color: #ddd; }
-    header { display: flex; justify-content: space-between; align-items: center; }
-    .tabs { margin-top: 20px; }
-    .tab { padding: 10px; cursor: pointer; display: inline-block; border: 1px solid #ccc; margin-right: 5px; border-radius: 4px;}
-    .tab.active { background: #007bff; color: #fff; border-color: #007bff;}
-    .tab-content { display: none; margin-top: 10px; }
-    .tab-content.active { display: block; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background: #f2f2f2; }
-    body.dark th { background: #333; }
-    .status-green { color: green; }
-    .status-orange { color: orange; }
-    .status-red { color: red; }
-    button { cursor: pointer; padding: 6px 12px; margin-left: 10px; border-radius: 4px; border:none; background:#007bff; color:#fff; }
-    button:hover { background:#0056b3; }
-    select { padding: 4px; }
-  </style>
+  <title>Flight Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
 </head>
 <body>
   <header>
-    <h1>AIX SEC OPS</h1>
-    <div>
-      <button onclick="location.href='admin.html'">Admin</button>
-      <button id="themeToggle">Dark Mode</button>
-    </div>
+    <h1>Flight Tracker</h1>
   </header>
-  <div style="text-align:center; margin: 20px;">
-  <input id="searchInput" type="text" placeholder="Search Flight No (IX/AK/FD/FZ/UL/J9 only)" />
-  <button onclick="searchFlight()">Search</button>
-</div>
 
-<div id="searchResults" style="margin: 20px auto; width: 90%; max-width: 1200px;"></div>
+  <main>
+    <section id="departures-section">
+      <h2>Departures</h2>
+      <table id="departures-table">
+        <thead>
+          <tr>
+            <th>Flight</th>
+            <th>To</th>
+            <th>STD</th>
+            <th>ETA</th>
+            <th>ATD</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
 
-  <label>Airline Filter:
-    <select id="airlineFilter">
-      <option value="all">All</option>
-      <option value="IX">IX Only</option>
-      <option value="IXAI">IX + AI</option>
-    </select>
-  </label>
-
-  <div class="tabs">
-    <div class="tab active" data-tab="arrivals">Arrivals</div>
-    <div class="tab" data-tab="departures">Departures</div>
-    <div class="tab" data-tab="turnaround">Turnaround</div>
-  </div>
-
-  <div id="arrivals" class="tab-content active">
-    <table>
-      <thead>
-        <tr><th>Flight</th><th>From</th><th>ETA</th><th>STA</th><th>A/C Type</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
-      </thead>
-      <tbody id="arrivals-table"><tr><td colspan="9">Loading...</td></tr></tbody>
-    </table>
-  </div>
-
-  <div id="departures" class="tab-content">
-    <table>
-      <thead>
-        <tr><th>Flight</th><th>To</th><th>ETD</th><th>STD</th><th>A/C Type</th><th>Reg</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
-      </thead>
-      <tbody id="departures-table"><tr><td colspan="9">Loading...</td></tr></tbody>
-    </table>
-  </div>
-
-  <div id="turnaround" class="tab-content">
-    <table>
-      <thead>
-        <tr><th>Arr / Dep Flight</th><th>Reg</th><th>STA / STD</th><th>Sector</th><th>A/C Type</th><th>Status</th><th>Bay</th><th>Belt</th></tr>
-      </thead>
-      <tbody id="turnaround-table"><tr><td colspan="8">Loading...</td></tr></tbody>
-    </table>
-  </div>
+    <section id="turnaround-section">
+      <h2>Turnaround</h2>
+      <table id="turnaround-table">
+        <thead>
+          <tr>
+            <th>Flight (Arrival)</th>
+            <th>From</th>
+            <th>ETA</th>
+            <th>Status</th>
+            <th>Flight (Departure)</th>
+            <th>To</th>
+            <th>STD</th>
+            <th>ATD</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
 
   <script>
-    const API_BASE = 'https://kittu-0wb2.onrender.com';
-    const activeAirlines = ["IX", "AK", "FD", "FZ", "UL", "J9"];
+    const SERPAPI_KEY = "e68e2dff18aea3576dc576b2e3ef1bbdd403cf42d69a7b47a30f6c755effe412";
 
-    // Tabs logic
-    document.querySelectorAll(".tab").forEach(tab => {
-      tab.onclick = () => {
-        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-        tab.classList.add("active");
-        document.getElementById(tab.dataset.tab).classList.add("active");
-      };
-    });
-
-    // Dark mode toggle
-    const themeToggle = document.getElementById('themeToggle');
-    themeToggle.onclick = () => {
-      document.body.classList.toggle('dark');
-      themeToggle.textContent = document.body.classList.contains('dark') ? 'Light Mode' : 'Dark Mode';
-      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
-    };
-    // Load saved theme
-    if(localStorage.getItem('theme') === 'dark') {
-      document.body.classList.add('dark');
-      themeToggle.textContent = 'Light Mode';
+    async function fetchATD(flightNo) {
+      const url = `https://serpapi.com/search.json?q=${flightNo}+flight+ATD&engine=google&api_key=${SERPAPI_KEY}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const snippet = data.organic_results?.[0]?.snippet || "";
+        const match = snippet.match(/(\d{1,2}:\d{2})\s*(AM|PM)?/i);
+        return match ? match[0] : "";
+      } catch {
+        return "";
+      }
     }
 
-    function toTime(ts) {
-      return ts ? new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', hour12: false}) : "-";
-    }
-
-    function filterFlight(flightNo) {
-      const filter = document.getElementById('airlineFilter').value;
-      if (filter === "IX") return flightNo.startsWith("IX");
-      if (filter === "IXAI") return flightNo.startsWith("IX") || flightNo.startsWith("AI");
-      return activeAirlines.includes(flightNo.slice(0, 2));
-    }
-
-    async function loadFlights(mode, tableId) {
-      const res = await fetch(`${API_BASE}/flights?mode=${mode}`);
-      const data = await res.json();
-      const tbody = document.getElementById(tableId);
+    async function loadDepartures() {
+      const res = await fetch("/flights?mode=departures");
+      const flights = await res.json();
+      const tbody = document.querySelector("#departures-table tbody");
       tbody.innerHTML = "";
 
-      data.filter(f => filterFlight(f.flight)).forEach(f => {
-        const row = `<tr>
+      for (const f of flights) {
+        const row = document.createElement("tr");
+        const atd = await fetchATD(f.flight);
+        row.innerHTML = `
           <td>${f.flight}</td>
-          <td>${mode === 'arrivals' ? f.from : f.to}</td>
-          <td>${toTime(f.eta)}</td>
-          <td>${toTime(f.std)}</td>
-          <td>${f.model || '-'}</td>
-          <td>${f.reg}</td>
+          <td>${f.to}</td>
+          <td>${new Date(f.std * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+          <td>${new Date(f.eta * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+          <td>${atd}</td>
           <td>${f.status}</td>
-          <td>${f.bay || '-'}</td>
-          <td>${f.belt || '-'}</td>
-        </tr>`;
-        tbody.innerHTML += row;
-      });
+        `;
+        tbody.appendChild(row);
+      }
     }
 
     async function loadTurnaround() {
-      const resArr = await fetch(`${API_BASE}/flights?mode=arrivals`);
-      const resDep = await fetch(`${API_BASE}/flights?mode=departures`);
-      const arr = await resArr.json();
-      const dep = await resDep.json();
-      const tbody = document.getElementById('turnaround-table');
+      const arr = await fetch("/flights?mode=arrivals").then(res => res.json());
+      const dep = await fetch("/flights?mode=departures").then(res => res.json());
+      const tbody = document.querySelector("#turnaround-table tbody");
       tbody.innerHTML = "";
 
-      arr.forEach(a => {
-        if(!filterFlight(a.flight)) return;
-        // Find matching departure with same reg and departs within 2 hours of arrival std
-        const match = dep.find(d => d.reg === a.reg && d.std > a.std && (d.std - a.std) <= 7200 && filterFlight(d.flight));
-        if (!match) return;
+      for (const a of arr) {
+        const d = dep.find(x => x.reg === a.reg);
+        if (!d) continue;
 
-        const row = `<tr>
-          <td>${a.flight} / ${match.flight}</td>
-          <td>${a.reg}</td>
-          <td>${toTime(a.std)} / ${toTime(match.std)}</td>
-          <td>${a.from} - COK - ${match.to}</td>
-          <td>${a.model || '-'}</td>
+        const atd = await fetchATD(d.flight);
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${a.flight}</td>
+          <td>${a.from}</td>
+          <td>${new Date(a.eta * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
           <td>${a.status}</td>
-          <td>${a.bay || '-'}</td>
-          <td>${a.belt || '-'}</td>
-        </tr>`;
-        tbody.innerHTML += row;
-      });
+          <td>${d.flight}</td>
+          <td>${d.to}</td>
+          <td>${new Date(d.std * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+          <td>${atd}</td>
+          <td>${d.status}</td>
+        `;
+        tbody.appendChild(row);
+      }
     }
 
-    document.getElementById("airlineFilter").onchange = () => {
-      loadFlights("arrivals", "arrivals-table");
-      loadFlights("departures", "departures-table");
-      loadTurnaround();
-    };
-
-    loadFlights("arrivals", "arrivals-table");
-    loadFlights("departures", "departures-table");
+    loadDepartures();
     loadTurnaround();
-    setInterval(() => {
-      loadFlights("arrivals", "arrivals-table");
-      loadFlights("departures", "departures-table");
-      loadTurnaround();
-    }, 30000);
   </script>
-  <script>
-function searchFlight() {
-  const query = document.getElementById("searchInput").value.toUpperCase().trim();
-  if (!query) return;
-
-  fetch(`/search?flight=${query}`)
-    .then(res => res.json())
-    .then(data => {
-      const container = document.getElementById("searchResults");
-      if (!data || data.length === 0) {
-        container.innerHTML = "<p>No matching flights found.</p>";
-        return;
-      }
-
-      const rows = data.map(flight => `
-        <tr>
-          <td>${flight.flight}</td>
-          <td>${flight.reg}</td>
-          <td>${flight.from}</td>
-          <td>${flight.to}</td>
-          <td>${formatTime(flight.std)}</td>
-          <td>${formatTime(flight.eta)}</td>
-          <td>${flight.status}</td>
-          <td>${flight.bay}</td>
-          <td>${flight.belt}</td>
-        </tr>
-      `).join("");
-
-      container.innerHTML = `
-        <h3>Search Results</h3>
-        <table border="1" cellpadding="6" style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr>
-              <th>Flight</th><th>Reg</th><th>From</th><th>To</th><th>STD</th><th>ETA</th><th>Status</th><th>Bay</th><th>Belt</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      `;
-    })
-    .catch(err => {
-      console.error(err);
-      document.getElementById("searchResults").innerHTML = "<p>Error fetching search results.</p>";
-    });
-}
-
-function formatTime(unix) {
-  if (!unix) return "-";
-  const d = new Date(unix * 1000);
-  return d.toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit' });
-}
-</script>
 </body>
 </html>
