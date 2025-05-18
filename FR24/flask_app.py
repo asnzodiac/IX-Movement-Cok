@@ -1,19 +1,15 @@
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import requests
-import datetime
-import os
 from datetime import datetime, timezone
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# FlightRadar24 API Configuration
 FR24_BASE_URL = "https://api.flightradar24.com/common/v1/airport.json"
-AIRPORT_CODE = "COK"
 TOKEN = "88gO2cDKmNNThvUuglHVMyNgejftewp1N7hW-KeFtPQ"
 
-# Headers to mimic browser requests
 HEADERS = {
     "accept": "*/*",
     "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
@@ -29,11 +25,9 @@ HEADERS = {
 }
 
 def get_current_timestamp():
-    """Get current timestamp for API requests"""
     return int(datetime.now(timezone.utc).timestamp())
 
 def format_time(timestamp):
-    """Convert timestamp to readable time format"""
     if not timestamp:
         return "--"
     try:
@@ -43,18 +37,15 @@ def format_time(timestamp):
         return "--"
 
 def get_flight_status(real_time, scheduled_time):
-    """Determine flight status based on times"""
     if not real_time or not scheduled_time:
         return "Scheduled"
-    
     try:
         real_dt = datetime.fromtimestamp(int(real_time), timezone.utc)
         sched_dt = datetime.fromtimestamp(int(scheduled_time), timezone.utc)
         diff = (real_dt - sched_dt).total_seconds() / 60
-        
-        if diff <= -5:
+        if diff < -5:
             return "Early"
-        elif diff <= 5:
+        elif -5 <= diff <= 5:
             return "On Time"
         elif diff <= 30:
             return "Delayed"
@@ -63,152 +54,116 @@ def get_flight_status(real_time, scheduled_time):
     except:
         return "Scheduled"
 
-@app.route('/')
-def index():
-    """Serve the frontend HTML"""
-    with open('index.html', 'r') as f:
-        return f.read()
+def fetch_flights(airport_code, mode):
+    timestamp = get_current_timestamp()
+    url = (f"{FR24_BASE_URL}?code={airport_code}&plugin[]=schedule&"
+           f"plugin-setting[schedule][mode]={mode}&"
+           f"plugin-setting[schedule][timestamp]={timestamp}&limit=100&page=1&token={TOKEN}")
+    response = requests.get(url, headers=HEADERS, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    flights = []
 
-@app.route('/api/flights/cok/arrivals')
-def get_arrivals():
-    """Fetch arrivals data from FlightRadar24"""
-    try:
-        timestamp = get_current_timestamp()
-        url = f"{FR24_BASE_URL}?code={AIRPORT_CODE}&plugin[]=schedule&plugin-setting[schedule][mode]=arrivals&plugin-setting[schedule][timestamp]={timestamp}&limit=100&page=1&token={TOKEN}"
-        
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        arrivals = []
-        if 'result' in data and 'response' in data['result'] and 'airport' in data['result']['response']:
-            airport_data = data['result']['response']['airport']
-            if 'pluginData' in airport_data and 'schedule' in airport_data['pluginData']:
-                arrivals_data = airport_data['pluginData']['schedule']['arrivals']['data']
+    if 'result' in data and 'response' in data['result'] and 'airport' in data['result']['response']:
+        airport_data = data['result']['response']['airport']
+        plugin_data = airport_data.get('pluginData', {}).get('schedule', {})
+        if mode in plugin_data:
+            flights_data = plugin_data[mode].get('data', [])
+            for flight in flights_data:
+                flight_info = flight.get('flight', {})
+                identification = flight_info.get('identification', {})
+                aircraft = flight_info.get('aircraft', {})
+                airport = flight_info.get('airport', {})
+                time = flight_info.get('time', {})
                 
-                for flight in arrivals_data:
-                    flight_info = flight['flight']
-                    identification = flight_info.get('identification', {})
-                    aircraft = flight_info.get('aircraft', {})
-                    airport = flight_info.get('airport', {})
-                    time = flight_info.get('time', {})
-                    status = flight_info.get('status', {})
-                    
-                    arrival = {
+                if mode == 'arrivals':
+                    flight_obj = {
                         'flightNumber': identification.get('number', {}).get('default', 'N/A'),
                         'from': airport.get('origin', {}).get('name', 'N/A'),
                         'eta': format_time(time.get('real', {}).get('arrival')),
                         'sta': format_time(time.get('scheduled', {}).get('arrival')),
-                        'status': get_flight_status(
-                            time.get('real', {}).get('arrival'),
-                            time.get('scheduled', {}).get('arrival')
-                        ),
+                        'status': get_flight_status(time.get('real', {}).get('arrival'),
+                                                    time.get('scheduled', {}).get('arrival')),
                         'registration': aircraft.get('registration', 'N/A'),
-                        'airline': identification.get('row', 0),
-                        'callsign': identification.get('callsign', 'N/A')
+                        'callsign': identification.get('callsign', 'N/A'),
+                        'airline': identification.get('operator', {}).get('name', 'N/A'),
                     }
-                    arrivals.append(arrival)
-        
-        return jsonify({"success": True, "data": arrivals, "count": len(arrivals)})
-    
-    except requests.exceptions.RequestException as e:
-        return jsonify({"success": False, "error": f"Network error: {str(e)}", "data": []}), 503
-    except Exception as e:
-        return jsonify({"success": False, "error": f"Processing error: {str(e)}", "data": []}), 500
-
-@app.route('/api/flights/cok/departures')
-def get_departures():
-    """Fetch departures data from FlightRadar24"""
-    try:
-        timestamp = get_current_timestamp()
-        url = f"{FR24_BASE_URL}?code={AIRPORT_CODE}&plugin[]=schedule&plugin-setting[schedule][mode]=departures&plugin-setting[schedule][timestamp]={timestamp}&limit=100&page=1&token={TOKEN}"
-        
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        departures = []
-        if 'result' in data and 'response' in data['result'] and 'airport' in data['result']['response']:
-            airport_data = data['result']['response']['airport']
-            if 'pluginData' in airport_data and 'schedule' in airport_data['pluginData']:
-                departures_data = airport_data['pluginData']['schedule']['departures']['data']
-                
-                for flight in departures_data:
-                    flight_info = flight['flight']
-                    identification = flight_info.get('identification', {})
-                    aircraft = flight_info.get('aircraft', {})
-                    airport = flight_info.get('airport', {})
-                    time = flight_info.get('time', {})
-                    status = flight_info.get('status', {})
-                    
-                    departure = {
+                else:  # departures
+                    flight_obj = {
                         'flightNumber': identification.get('number', {}).get('default', 'N/A'),
                         'to': airport.get('destination', {}).get('name', 'N/A'),
                         'etd': format_time(time.get('real', {}).get('departure')),
                         'std': format_time(time.get('scheduled', {}).get('departure')),
-                        'status': get_flight_status(
-                            time.get('real', {}).get('departure'),
-                            time.get('scheduled', {}).get('departure')
-                        ),
+                        'status': get_flight_status(time.get('real', {}).get('departure'),
+                                                    time.get('scheduled', {}).get('departure')),
                         'registration': aircraft.get('registration', 'N/A'),
-                        'airline': identification.get('row', 0),
-                        'callsign': identification.get('callsign', 'N/A')
+                        'callsign': identification.get('callsign', 'N/A'),
+                        'airline': identification.get('operator', {}).get('name', 'N/A'),
                     }
-                    departures.append(departure)
-        
-        return jsonify({"success": True, "data": departures, "count": len(departures)})
-    
-    except requests.exceptions.RequestException as e:
+                flights.append(flight_obj)
+
+    return flights
+
+@app.route('/')
+def serve_frontend():
+    return send_from_directory('static', 'index.html')
+
+@app.route('/api/flights/<station>/arrivals')
+def arrivals_api(station):
+    station = station.upper()
+    try:
+        arrivals = fetch_flights(station, 'arrivals')
+        return jsonify({"success": True, "data": arrivals, "count": len(arrivals)})
+    except requests.RequestException as e:
         return jsonify({"success": False, "error": f"Network error: {str(e)}", "data": []}), 503
     except Exception as e:
         return jsonify({"success": False, "error": f"Processing error: {str(e)}", "data": []}), 500
 
-@app.route('/api/flights/cok/turnaround')
-def get_turnaround():
-    """Fetch turnaround flights (flights that both arrive and depart)"""
+@app.route('/api/flights/<station>/departures')
+def departures_api(station):
+    station = station.upper()
     try:
-        # Get both arrivals and departures
-        arrivals_response = get_arrivals()
-        departures_response = get_departures()
-        
-        arrivals_data = arrivals_response.get_json()
-        departures_data = departures_response.get_json()
-        
-        if not arrivals_data['success'] or not departures_data['success']:
-            return jsonify({"success": False, "error": "Failed to fetch flight data", "data": []})
-        
-        arrivals = arrivals_data['data']
-        departures = departures_data['data']
-        
-        # Match flights by registration number to find turnarounds
+        departures = fetch_flights(station, 'departures')
+        return jsonify({"success": True, "data": departures, "count": len(departures)})
+    except requests.RequestException as e:
+        return jsonify({"success": False, "error": f"Network error: {str(e)}", "data": []}), 503
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Processing error: {str(e)}", "data": []}), 500
+
+@app.route('/api/flights/<station>/turnaround')
+def turnaround_api(station):
+    station = station.upper()
+    try:
+        arrivals = fetch_flights(station, 'arrivals')
+        departures = fetch_flights(station, 'departures')
+
+        arrival_by_reg = {f['registration']: f for f in arrivals if f['registration'] != 'N/A'}
         turnarounds = []
-        arrival_by_reg = {flight['registration']: flight for flight in arrivals if flight['registration'] != 'N/A'}
-        
-        for departure in departures:
-            if departure['registration'] in arrival_by_reg:
-                arrival = arrival_by_reg[departure['registration']]
+
+        for dep in departures:
+            reg = dep['registration']
+            if reg in arrival_by_reg:
+                arr = arrival_by_reg[reg]
                 turnaround = {
-                    'flightNumber': f"{arrival['flightNumber']} / {departure['flightNumber']}",
-                    'from': arrival['from'],
-                    'to': departure['to'],
-                    'arrival': arrival['eta'],
-                    'departure': departure['etd'],
-                    'registration': departure['registration']
+                    'flightNumber': f"{arr['flightNumber']} / {dep['flightNumber']}",
+                    'from': arr['from'],
+                    'to': dep['to'],
+                    'arrival': arr['eta'],
+                    'departure': dep['etd'],
+                    'registration': reg,
+                    'statusArrival': arr['status'],
+                    'statusDeparture': dep['status'],
                 }
                 turnarounds.append(turnaround)
-        
+
         return jsonify({"success": True, "data": turnarounds, "count": len(turnarounds)})
-    
     except Exception as e:
         return jsonify({"success": False, "error": f"Processing error: {str(e)}", "data": []}), 500
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint"""
     return jsonify({"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()})
 
 if __name__ == '__main__':
-    # Get port from environment variable (required for Render deployment)
     port = int(os.environ.get('PORT', 5000))
-    # Run the app
     app.run(host='0.0.0.0', port=port, debug=False)
