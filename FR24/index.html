@@ -1,140 +1,919 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AIX Tracker</title>
-  <style>
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }
-    th { background: #eee; }
-    button { padding: 6px 12px; margin-bottom: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIX SEC OPS</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Flight Tracker">
+    <link rel="apple-touch-icon" href="https://via.placeholder.com/192x192/667eea/ffffff?text=FT">
+    <link rel="manifest" href="manifest.json">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f6fa;
+            color: #2c3e50;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 150px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+
+        select, input {
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c53030;
+        }
+
+        .oal-management {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 10px;
+            border: 2px dashed #c6d2fd;
+        }
+
+        .oal-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .oal-tag {
+            background: #667eea;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .oal-tag .remove-btn {
+            background: rgba(255,255,255,0.3);
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+        }
+
+        .add-oal-form {
+            display: none;
+            margin-top: 15px;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .add-oal-form.active {
+            display: flex;
+        }
+
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: white;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tab:hover {
+            background: #f8f9ff;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #764ba2;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 15px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e8eaed;
+        }
+
+        th {
+            background: linear-gradient(135deg, #f1f3f9 0%, #e8eeff 100%);
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background-color: #f8f9ff;
+        }
+
+        .flight-number {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status.on-time {
+            background: #d4f4dd;
+            color: #0d7c3d;
+        }
+
+        .status.delayed {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .status.early {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .status.scheduled {
+            background: #faf5ff;
+            color: #6b46c1;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.1rem;
+            color: #718096;
+        }
+
+        .error {
+            text-align: center;
+            padding: 50px;
+            color: #e53e3e;
+            background: #fed7d7;
+            border-radius: 10px;
+            margin: 20px;
+        }
+
+        .registration {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .last-updated {
+            text-align: center;
+            color: #718096;
+            font-size: 0.9rem;
+            margin-top: 20px;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .turnaround-time {
+            font-size: 0.8rem;
+            color: #718096;
+            font-style: italic;
+        }
+
+        .install-banner {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+        }
+
+        .install-banner.show {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .control-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .tab {
+                border-bottom: 1px solid #e2e8f0;
+            }
+            
+            table {
+                font-size: 0.8rem;
+            }
+            
+            th, td {
+                padding: 10px 8px;
+            }
+
+            .stats-row {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
 <body>
-  <h1>AIX Tracker</h1>
+    <div class="container">
+        <div class="header">
+            <h1>✈️ AIX SEC OPS</h1>
+            <p>Real-time flight information across multiple airports</p>
+        </div>
 
-  <section>
-    <h2>Arrivals</h2>
-    <button onclick="loadEarlier('arrivals')">Load Earlier Arrivals</button>
-    <table id="arrivals-table">
-      <thead><tr><th>Flight</th><th>From</th><th>ETA</th><th>STA</th><th>Reg</th><th>Aircraft</th><th>Status</th></tr></thead>
-      <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
-    </table>
-  </section>
+        <div class="controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="station-select">Airport Station</label>
+                    <select id="station-select" onchange="changeStation()">
+                        <option value="COK">COK - Cochin International</option>
+                        <option value="CCJ">CCJ - Calicut International</option>
+                        <option value="CNN">CNN - Kannur International</option>
+                        <option value="TRV">TRV - Trivandrum International</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <button class="btn btn-primary" onclick="toggleOALManagement()">
+                        <span id="oal-btn-text">Add OAL+</span>
+                    </button>
+                </div>
 
-  <section>
-    <h2>Departures</h2>
-    <button onclick="loadEarlier('departures')">Load Earlier Departures</button>
-    <table id="departures-table">
-      <thead><tr><th>Flight</th><th>To</th><th>ETD</th><th>STD</th><th>ATD</th><th>Reg</th><th>Aircraft</th><th>Status</th></tr></thead>
-      <tbody><tr><td colspan="8">Loading...</td></tr></tbody>
-    </table>
-  </section>
+                <div class="control-group">
+                    <button class="btn btn-secondary" onclick="refreshData()">
+                        🔄 Refresh Data
+                    </button>
+                </div>
+            </div>
 
-  <section>
-    <h2>Turnaround</h2>
-    <table id="turnaround-table">
-      <thead><tr><th>Arr / Dep</th><th>Reg</th><th>STA / STD</th><th>Route</th><th>Aircraft</th><th>Status</th><th>ATD</th></tr></thead>
-      <tbody><tr><td colspan="7">Loading...</td></tr></tbody>
-    </table>
-  </section>
+            <div class="oal-management" id="oal-management">
+                <h3>Other Airlines (OAL) Management</h3>
+                <p>By default, only IX flights are shown. Add other airlines to include them:</p>
+                
+                <div class="oal-list" id="oal-list">
+                    <!-- OAL tags will be populated here -->
+                </div>
 
-  <script>
-    const API_BASE = "/flights";
-    const SERPAPI_KEY = "e68e2dff18aea3576dc576b2e3ef1bbdd403cf42d69a7b47a30f6c755effe412";
-    let timestamps = {
-      arrivals: Math.floor(Date.now() / 1000),
-      departures: Math.floor(Date.now() / 1000)
-    };
+                <div class="add-oal-form" id="add-oal-form">
+                    <input type="text" id="oal-input" placeholder="Enter 2-letter airline code (e.g., FD)" maxlength="2" style="text-transform: uppercase;">
+                    <button class="btn btn-primary" onclick="addOAL()">Add</button>
+                    <button class="btn btn-secondary" onclick="cancelAddOAL()">Cancel</button>
+                </div>
 
-    const formatTime = ts => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+                <button class="btn btn-secondary" id="add-oal-btn" onclick="showAddOALForm()">
+                    ➕ Add Airline
+                </button>
+            </div>
+        </div>
 
-    async function fetchATD(flightNo) {
-      try {
-        const res = await fetch(`/search-atd?flight=${flightNo}`);
-        const data = await res.json();
-        const snippet = data.results?.[0] || "";
-        const match = snippet.match(/(\d{1,2}:\d{2})\s*(AM|PM)?/i);
-        return match ? match[0] : "-";
-      } catch {
-        return "-";
-      }
-    }
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-number" id="arrivals-count">--</div>
+                <div class="stat-label">Total Arrivals</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="departures-count">--</div>
+                <div class="stat-label">Total Departures</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="turnaround-count">--</div>
+                <div class="stat-label">Turnarounds</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="filtered-count">--</div>
+                <div class="stat-label">Filtered Results</div>
+            </div>
+        </div>
 
-    async function loadFlights(mode, append = false) {
-      const ts = timestamps[mode];
-      const res = await fetch(`${API_BASE}?mode=${mode}&ts=${ts}`);
-      const data = await res.json();
-      const tableId = `${mode}-table`;
-      const tbody = document.getElementById(tableId).querySelector("tbody");
-      if (!append) tbody.innerHTML = "";
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('arrivals')">✈️ Arrivals</button>
+            <button class="tab" onclick="switchTab('departures')">🛫 Departures</button>
+            <button class="tab" onclick="switchTab('turnaround')">🔄 Turnaround</button>
+        </div>
 
-      for (const f of data) {
-        const tr = document.createElement("tr");
-        if (mode === "arrivals") {
-          tr.innerHTML = `
-            <td>${f.flight}</td><td>${f.from}</td><td>${formatTime(f.eta)}</td>
-            <td>${formatTime(f.std)}</td><td>${f.reg}</td><td>${f.model}</td><td>${f.status}</td>
-          `;
-        } else {
-          const atdId = `atd-${f.flight}-${ts}`;
-          tr.innerHTML = `
-            <td>${f.flight}</td><td>${f.to}</td><td>${formatTime(f.eta)}</td>
-            <td>${formatTime(f.std)}</td><td id="${atdId}">Loading...</td>
-            <td>${f.reg}</td><td>${f.model}</td><td>${f.status}</td>
-          `;
-          fetchATD(f.flight).then(atd => {
-            const el = document.getElementById(atdId);
-            if (el) el.textContent = atd;
-          });
-        }
-        tbody.appendChild(tr);
-      }
+        <div id="arrivals" class="tab-content active">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Flight No.</th>
+                            <th>From</th>
+                            <th>ETA</th>
+                            <th>STA</th>
+                            <th>Status</th>
+                            <th>Registration</th>
+                        </tr>
+                    </thead>
+                    <tbody id="arrivals-tbody">
+                        <tr>
+                            <td colspan="6" class="loading">Loading arrivals data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-      timestamps[mode] -= 7200; // subtract 2 hours for next load
-    }
+        <div id="departures" class="tab-content">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Flight No.</th>
+                            <th>To</th>
+                            <th>ETD</th>
+                            <th>STD</th>
+                            <th>Status</th>
+                            <th>Registration</th>
+                        </tr>
+                    </thead>
+                    <tbody id="departures-tbody">
+                        <tr>
+                            <td colspan="6" class="loading">Loading departures data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-    async function loadTurnaround() {
-      const arr = await fetch(`${API_BASE}?mode=arrivals`).then(res => res.json());
-      const dep = await fetch(`${API_BASE}?mode=departures`).then(res => res.json());
-      const tbody = document.getElementById("turnaround-table").querySelector("tbody");
-      tbody.innerHTML = "";
+        <div id="turnaround" class="tab-content">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Flight No.</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Arrival</th>
+                            <th>Departure</th>
+                            <th>Turnaround Time</th>
+                            <th>Registration</th>
+                        </tr>
+                    </thead>
+                    <tbody id="turnaround-tbody">
+                        <tr>
+                            <td colspan="7" class="loading">Loading turnaround data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-      for (const a of arr) {
-        const match = dep.find(d => d.reg === a.reg && d.std > a.std && d.std - a.std <= 7200);
-        if (!match) continue;
+        <div class="last-updated" id="last-updated">
+            Last updated: --
+        </div>
+    </div>
 
-        const atdId = `turn-atd-${match.flight}`;
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${a.flight} / ${match.flight}</td><td>${a.reg}</td>
-          <td>${formatTime(a.std)} / ${formatTime(match.std)}</td>
-          <td>${a.from} - COK - ${match.to}</td><td>${a.model}</td>
-          <td>${a.status} / ${match.status}</td><td id="${atdId}">Loading...</td>
-        `;
-        tbody.appendChild(tr);
+    <div class="install-banner" id="install-banner">
+        <p>Install this app for quick access!</p>
+        <button class="btn btn-secondary" onclick="installApp()" style="margin-top: 10px;">Install</button>
+        <button class="btn btn-danger" onclick="hideInstallBanner()" style="margin-top: 10px;">Dismiss</button>
+    </div>
 
-        fetchATD(match.flight).then(atd => {
-          const el = document.getElementById(atdId);
-          if (el) el.textContent = atd;
+    <script>
+        let currentTab = 'arrivals';
+        let currentStation = 'COK';
+        let oalAirlines = [];
+        let flightData = {
+            arrivals: [],
+            departures: [],
+            turnaround: []
+        };
+        let allFlightData = {
+            arrivals: [],
+            departures: [],
+            turnaround: []
+        };
+        let deferredPrompt;
+
+        // PWA Installation
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallBanner();
         });
-      }
-    }
 
-    function loadEarlier(mode) {
-      loadFlights(mode, true);
-    }
+        function showInstallBanner() {
+            document.getElementById('install-banner').classList.add('show');
+        }
 
-    loadFlights("arrivals");
-    loadFlights("departures");
-    loadTurnaround();
-    setInterval(() => {
-      loadFlights("arrivals");
-      loadFlights("departures");
-      loadTurnaround();
-    }, 60000);
-  </script>
+        function hideInstallBanner() {
+            document.getElementById('install-banner').classList.remove('show');
+            localStorage.setItem('install-banner-dismissed', 'true');
+        }
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                        hideInstallBanner();
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        // Load saved preferences
+        function loadPreferences() {
+            const savedStation = localStorage.getItem('selected-station');
+            const savedOAL = localStorage.getItem('oal-airlines');
+            
+            if (savedStation) {
+                currentStation = savedStation;
+                document.getElementById('station-select').value = savedStation;
+            }
+            
+            if (savedOAL) {
+                oalAirlines = JSON.parse(savedOAL);
+                updateOALDisplay();
+            }
+
+            // Check if install banner was dismissed
+            if (localStorage.getItem('install-banner-dismissed') === 'true') {
+                hideInstallBanner();
+            }
+        }
+
+        // Save preferences
+        function savePreferences() {
+            localStorage.setItem('selected-station', currentStation);
+            localStorage.setItem('oal-airlines', JSON.stringify(oalAirlines));
+        }
+
+        function changeStation() {
+            currentStation = document.getElementById('station-select').value;
+            savePreferences();
+            loadAllData();
+        }
+
+        function toggleOALManagement() {
+            const oalManagement = document.getElementById('oal-management');
+            const btnText = document.getElementById('oal-btn-text');
+            
+            if (oalManagement.style.display === 'none' || !oalManagement.style.display) {
+                oalManagement.style.display = 'block';
+                btnText.textContent = 'Hide OAL Management';
+            } else {
+                oalManagement.style.display = 'none';
+                btnText.textContent = 'Add OAL+';
+            }
+        }
+
+        function showAddOALForm() {
+            document.getElementById('add-oal-form').classList.add('active');
+            document.getElementById('add-oal-btn').style.display = 'none';
+            document.getElementById('oal-input').focus();
+        }
+
+        function cancelAddOAL() {
+            document.getElementById('add-oal-form').classList.remove('active');
+            document.getElementById('add-oal-btn').style.display = 'inline-block';
+            document.getElementById('oal-input').value = '';
+        }
+
+        function addOAL() {
+            const input = document.getElementById('oal-input');
+            const airlineCode = input.value.trim().toUpperCase();
+            
+            if (airlineCode.length === 2 && !oalAirlines.includes(airlineCode)) {
+                oalAirlines.push(airlineCode);
+                updateOALDisplay();
+                savePreferences();
+                cancelAddOAL();
+                applyFilters();
+            } else {
+                alert('Please enter a valid 2-letter airline code that is not already added.');
+            }
+        }
+
+        function removeOAL(airlineCode) {
+            const index = oalAirlines.indexOf(airlineCode);
+            if (index > -1) {
+                oalAirlines.splice(index, 1);
+                updateOALDisplay();
+                savePreferences();
+                applyFilters();
+            }
+        }
+
+        function updateOALDisplay() {
+            const oalList = document.getElementById('oal-list');
+            
+            if (oalAirlines.length === 0) {
+                oalList.innerHTML = '<p style="color: #718096; font-style: italic;">No additional airlines added. Only IX flights will be shown.</p>';
+            } else {
+                oalList.innerHTML = oalAirlines.map(airline => `
+                    <div class="oal-tag">
+                        ${airline}
+                        <button class="remove-btn" onclick="removeOAL('${airline}')" title="Remove ${airline}">
+                            ×
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function filterFlights(flights) {
+            const allowedPrefixes = ['IX', ...oalAirlines];
+            return flights.filter(flight => {
+                const flightNumber = flight.flightNumber || '';
+                return allowedPrefixes.some(prefix => flightNumber.startsWith(prefix));
+            });
+        }
+
+        function applyFilters() {
+            flightData.arrivals = filterFlights(allFlightData.arrivals);
+            flightData.departures = filterFlights(allFlightData.departures);
+            flightData.turnaround = filterFlights(allFlightData.turnaround);
+            
+            displayFlightData(currentTab, flightData[currentTab]);
+            updateStats();
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            currentTab = tabName;
+            
+            if (flightData[tabName].length === 0 && allFlightData[tabName].length === 0) {
+                loadFlightData(tabName);
+            } else {
+                displayFlightData(tabName, flightData[tabName]);
+            }
+        }
+
+        async function loadFlightDataFromAPI(station, type) {
+            try {
+                const baseUrl = 'https://kittu-0wb2.onrender.com';
+                let apiUrl = `${baseUrl}/api/flights/${station.toLowerCase()}/${type}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('API call failed:', error);
+                return {
+                    success: false,
+                    error: `Failed to connect to server: ${error.message}`,
+                    data: []
+                };
+            }
+        }
+
+        async function loadFlightData(type) {
+            const tbody = document.getElementById(`${type}-tbody`);
+            tbody.innerHTML = `<tr><td colspan="${type === 'turnaround' ? '7' : '6'}" class="loading">Loading ${type} data for ${currentStation}...</td></tr>`;
+
+            try {
+                const response = await loadFlightDataFromAPI(currentStation, type);
+                
+                if (response.success) {
+                    allFlightData[type] = response.data;
+                    applyFilters();
+                    updateLastUpdated();
+                } else {
+                    throw new Error(response.error);
+                }
+            } catch (error) {
+                console.error(`Error loading ${type} data:`, error);
+                tbody.innerHTML = `<tr><td colspan="${type === 'turnaround' ? '7' : '6'}" class="error">Error loading data: ${error.message}</td></tr>`;
+            }
+        }
+
+        function displayFlightData(type, data) {
+            const tbody = document.getElementById(`${type}-tbody`);
+            
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${type === 'turnaround' ? '7' : '6'}" class="loading">No ${type} data available for selected filters</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            data.forEach(flight => {
+                html += `<tr>`;
+                
+                if (type === 'arrivals') {
+                    html += `
+                        <td class="flight-number">${flight.flightNumber}</td>
+                        <td>${flight.from}</td>
+                        <td>${flight.eta}</td>
+                        <td>${flight.sta}</td>
+                        <td><span class="status ${flight.status.toLowerCase().replace(' ', '-')}">${flight.status}</span></td>
+                        <td class="registration">${flight.registration}</td>
+                    `;
+                } else if (type === 'departures') {
+                    html += `
+                        <td class="flight-number">${flight.flightNumber}</td>
+                        <td>${flight.to}</td>
+                        <td>${flight.etd}</td>
+                        <td>${flight.std}</td>
+                        <td><span class="status ${flight.status.toLowerCase().replace(' ', '-')}">${flight.status}</span></td>
+                        <td class="registration">${flight.registration}</td>
+                    `;
+                } else { // turnaround
+                    html += `
+                        <td class="flight-number">${flight.flightNumber}</td>
+                        <td>${flight.from}</td>
+                        <td>${flight.to}</td>
+                        <td>${flight.arrival}</td>
+                        <td>${flight.departure}</td>
+                        <td class="turnaround-time">${flight.turnaroundTime || '--'}</td>
+                        <td class="registration">${flight.registration}</td>
+                    `;
+                }
+                
+                html += `</tr>`;
+            });
+            
+            tbody.innerHTML = html;
+            updateStats();
+        }
+
+        function updateStats() {
+            document.getElementById('arrivals-count').textContent = allFlightData.arrivals.length;
+            document.getElementById('departures-count').textContent = allFlightData.departures.length;
+            document.getElementById('turnaround-count').textContent = allFlightData.turnaround.length;
+            document.getElementById('filtered-count').textContent = flightData[currentTab].length;
+        }
+
+        function refreshData() {
+            loadAllData();
+        }
+
+        function loadAllData() {
+            allFlightData = { arrivals: [], departures: [], turnaround: [] };
+            flightData = { arrivals: [], departures: [], turnaround: [] };
+            
+            // Load all tabs
+            loadFlightData('arrivals');
+            loadFlightData('departures');
+            loadFlightData('turnaround');
+        }
+
+        function updateLastUpdated() {
+            const now = new Date();
+            document.getElementById('last-updated').textContent = 
+                `Last updated: ${now.toLocaleString()} for ${currentStation}`;
+        }
+
+        // Handle OAL input enter key
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('oal-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addOAL();
+                }
+            });
+            
+            // Auto-uppercase OAL input
+            document.getElementById('oal-input').addEventListener('input', function(e) {
+                e.target.value = e.target.value.toUpperCase();
+            });
+        });
+
+        // Initialize app
+        window.addEventListener('load', () => {
+            loadPreferences();
+            loadAllData();
+            
+            // Hide OAL management initially
+            document.getElementById('oal-management').style.display = 'none';
+        });
+
+        // Auto-refresh every 5 minutes
+        setInterval(() => {
+            if (Object.values(flightData).some(data => data.length > 0)) {
+                refreshData();
+            }
+        }, 300000);
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => console.log('SW registered'))
+                .catch(error => console.log('SW registration failed'));
+        }
+    </script>
 </body>
 </html>
