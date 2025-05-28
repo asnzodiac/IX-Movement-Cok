@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>AIX SEC OPS - Aswin COK </title>
+  <title>AIX SEC OPS - Aswin COK</title>
   <meta name="theme-color" content="#000000" />
   <link rel="manifest" href="manifest.json" />
   <style>
@@ -188,8 +188,16 @@
       return `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${ts}&page=${page}&limit=100`;
     };
 
-    const toLocalTime = ts =>
-      ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : "-";
+    const toLocalTime = ts => {
+      if (!ts) return "-";
+      // Convert UTC timestamp to IST and format in 24-hour format
+      return new Date(ts * 1000).toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    };
 
     const classifyStatus = (estimated, scheduled) => {
       if (!estimated || !scheduled) return "status-green";
@@ -218,9 +226,9 @@
         return "https://cdn.brandfetch.io/idWY_rcAtG/w/800/h/602/theme/dark/symbol.png?c=1dxbfHSJFAPEGdCLU4o5B";
       } else if (flightNumber.startsWith("EK")) {
         return "https://cdn.brandfetch.io/idItGcrKZZ/w/800/h/656/id6DT2gfn2.png?c=1dxbfHSJFAPEGdCLU4o5B";
-        } else if (flightNumber.startsWith("SV")) {
+      } else if (flightNumber.startsWith("SV")) {
         return "https://cdn.brandfetch.io/id_gx1nNaB/w/400/h/400/theme/dark/icon.jpeg?c=1dxbfHSJFAPEGdCLU4o5B";
-        } else if (flightNumber.startsWith("9I")) {
+      } else if (flightNumber.startsWith("9I")) {
         return "https://cdn.brandfetch.io/id0b9CbCMc/w/800/h/210/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
       } else if (flightNumber.startsWith("GF")) {
         return "https://cdn.brandfetch.io/id7mVly1EH/w/800/h/287/theme/dark/logo.png?c=1dxbfHSJFAPEGdCLU4o5B";
