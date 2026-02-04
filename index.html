@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIX Security – COK</title>
+<meta name="theme-color" content="#000000" />
+<link rel="manifest" href="manifest.json" />
+
+<style>
+:root {
+  --bg:#fff; --text:#000; --hdr:#eee; --th:#333; --tht:#fff;
+  --green:#c8f7c5; --yellow:#fff3b0; --red:#f7c5c5; --grey:#e0e0e0;
+}
+[data-theme="dark"] {
+  --bg:#121212; --text:#fff; --hdr:#1f1f1f; --th:#2c2c2c; --tht:#fff;
+  --green:#1f4d2b; --yellow:#5c4b00; --red:#5c1f1f; --grey:#333;
+}
+body { background:var(--bg); color:var(--text); font-family:Arial; margin:15px; }
+h2 { background:var(--hdr); padding:8px; }
+table { width:100%; border-collapse:collapse; margin-bottom:30px; }
+th,td { border:1px solid #666; padding:6px; text-align:center; }
+th { background:var(--th); color:var(--tht); position:sticky; top:0; z-index:2; }
+.controls { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+button { padding:6px 10px; }
+.flight-logo { height:16px; vertical-align:middle; margin-right:4px; }
+.onTime { background:var(--green); }
+.delay { background:var(--yellow); }
+.heavyDelay { background:var(--red); }
+.cancelled { background:var(--grey); }
+</style>
+</head>
+
+<body>
+
+<div class="controls">
+  <button id="loadEarlierBtn">Load Earlier Flights</button>
+  <button id="notifyBtn">Enable Notifications</button>
+  <button id="themeToggle">Dark Mode</button>
+</div>
+
+<h2>Arrivals – COK</h2>
+<table id="arrivals-table">
+<thead>
+<tr><th>Flight</th><th>Reg</th><th>From</th><th>ETA</th><th>STA</th><th>Aircraft</th><th>Status</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<h2>Departures – COK</h2>
+<table id="departures-table">
+<thead>
+<tr><th>Flight</th><th>Reg</th><th>To</th><th>ETD</th><th>STD</th><th>Aircraft</th><th>Status</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<script>
+/* ================= CONFIG ================= */
+const AIRPORT = "cok";
+const baseUrl = `https://api.flightradar24.com/common/v1/airport.json?code=${AIRPORT}`;
+let baseTimestamp = Math.floor(Date.now() / 1000);
+let loadedTimestamps = new Set();
+
+/* ================= HELPERS ================= */
+const getEndpoint = (type, ts) =>
+  `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${ts}&limit=100`;
+
+const toTime = t =>
+  t ? new Date(t * 1000).toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }) : "-";
+
+const airlineAllowed = fn =>
+  ["IX","AK","FD","J9","UL","FZ"].some(a => fn.startsWith(a));
+
+const delayMinutes = (sch, est) =>
+  sch && est ? Math.round((est - sch) / 60) : 0;
+
+const rowClass = (status, delay) => {
+  if (status?.toLowerCase().includes("cancel")) return "cancelled";
+  if (delay > 30) return "heavyDelay";
+  if (delay > 5) return "delay";
+  return "onTime";
+};
+
+const withinTimeWindow = (type, sch, est, act) => {
+  const now = Math.floor(Date.now() / 1000);
+  const oneHr = 3600;
+  const twentyHr = now + 20 * oneHr;
+  const t = sch || est || 0;
+
+  if (t >= now - oneHr && t <= twentyHr) return true;
+  if (sch && now > sch && (!act || act > now)) return true;
+  if (act && act >= now - (type === "arrivals" ? 1200 : 300)) return true;
+
+  return false;
+};
+
+/* ================= LOAD ================= */
+async function loadFlights(type, ts) {
+  if (loadedTimestamps.has(type + ts)) return;
+  loadedTimestamps.add(type + ts);
+
+  const res = await fetch(getEndpoint(type, ts));
+  const data = await res.json();
+  const flights = data?.result?.response?.airport?.pluginData?.schedule?.[type]?.data || [];
+  const tbody = document.querySelector(`#${type}-table tbody`);
+
+  flights.forEach(f => {
+    const fl = f.flight;
+    const fn = fl?.identification?.number?.default || "";
+    if (!airlineAllowed(fn)) return;
+
+    const isDep = type === "departures";
+    const sch = isDep ? fl.time.scheduled?.departure : fl.time.scheduled?.arrival;
+    const est = isDep ? fl.time.estimated?.departure : fl.time.estimated?.arrival;
+    const act = isDep ? fl.time.actual?.departure : fl.time.actual?.arrival;
+
+    if (!withinTimeWindow(type, sch, est, act)) return;
+
+    const flightId = fl.identification?.id || fn;
+    if (tbody.querySelector(`[data-flight-id="${flightId}"]`)) return;
+
+    const dly = delayMinutes(sch, est);
+    const statusText = fl.status?.text || "-";
+
+    const tr = document.createElement("tr");
+    tr.dataset.flightId = flightId;
+    tr.className = rowClass(statusText, dly);
+
+    tr.innerHTML = `
+      <td>${fn}</td>
+      <td>${fl.aircraft?.registration || "-"}</td>
+      <td>${isDep ? fl.airport.destination?.code?.iata : fl.airport.origin?.code?.iata}</td>
+      <td>${toTime(est)} ${dly > 0 ? `(+${dly})` : ""}</td>
+      <td>${toTime(sch)}</td>
+      <td>${fl.aircraft?.model?.text || "-"}</td>
+      <td>${statusText}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ================= INIT ================= */
+async function loadInitialWindow() {
+  baseTimestamp = Math.floor(Date.now() / 1000);
+  loadedTimestamps.clear();
+
+  for (let i = 0; i <= 2; i++) {   // reduced for mobile safety
+    const ts = baseTimestamp + i * 6 * 3600;
+    await Promise.all([
+      loadFlights("arrivals", ts),
+      loadFlights("departures", ts)
+    ]);
+  }
+}
+
+document.getElementById("loadEarlierBtn").onclick = async () => {
+  baseTimestamp -= 6 * 3600;
+  await loadFlights("arrivals", baseTimestamp);
+  await loadFlights("departures", baseTimestamp);
+};
+
+document.getElementById("notifyBtn").onclick = async () => {
+  if (!("Notification" in window)) {
+    alert("Notifications not supported on this device");
+    return;
+  }
+  if (Notification.permission === "default") {
+    await Notification.requestPermission();
+  }
+  alert(Notification.permission === "granted" ? "Notifications enabled" : "Notifications denied");
+};
+
+document.getElementById("themeToggle").onclick = () => {
+  document.documentElement.dataset.theme =
+    document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+};
+
+loadInitialWindow();
+setInterval(loadInitialWindow, 30000);
+</script>
+
+</body>
+</html>
