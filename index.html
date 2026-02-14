@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIX Security – COK (Mobile Optimized)</title>
+  <meta name="theme-color" content="#000000" />
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    :root {
+      --bg: #fff; --text: #000; --hdr: #eee; --th: #333; --tht: #fff;
+      --green: #c8f7c5; --yellow: #fff3b0; --red: #f7c5c5; --grey: #e0e0e0;
+      --delayed-row-bg: #fff0f0; --completed-row-bg: #f0fff0;
+    }
+    [data-theme="dark"] {
+      --bg: #121212; --text: #fff; --hdr: #1f1f1f; --th: #2c2c2c; --tht: #fff;
+      --green: #1f4d2b; --yellow: #5c4b00; --red: #5c1f1f; --grey: #333;
+      --delayed-row-bg: #3a2a2a; --completed-row-bg: #2a3a2a;
+    }
+    body { background: var(--bg); color: var(--text); font-family: Arial, sans-serif; margin: 15px; }
+    h2 { background: var(--hdr); padding: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+    th, td { border: 1px solid #666; padding: 6px; text-align: center; }
+    th { background: var(--th); color: var(--tht); position: sticky; top: 0; z-index: 2; }
+    .controls { display: flex; flex-wrap: wrap; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+    button, select { padding: 8px 12px; font-size: 16px; touch-action: manipulation; } /* Larger for mobile */
+    .flight-logo { height: 16px; vertical-align: middle; margin-right: 4px; }
+    .onTime { background: var(--green); }
+    .delay { background: var(--yellow); }
+    .heavyDelay { background: var(--red); }
+    .cancelled { background: var(--grey); }
+    .delayed-row { background-color: var(--delayed-row-bg); }
+    .completed-row { background-color: var(--completed-row-bg); }
+    .tabs { display: flex; justify-content: center; margin-bottom: 10px; flex-wrap: wrap; }
+    .tabs button { margin: 5px; padding: 8px 12px; font-size: 16px; }
+    /* Mobile Optimizations */
+    @media (max-width: 768px) {
+      table { display: block; overflow-x: auto; white-space: nowrap; } /* Horizontal scroll for tables */
+      th, td { padding: 4px; font-size: 14px; } /* Smaller padding/text on mobile */
+      .controls { flex-direction: column; align-items: stretch; }
+      button, select { width: 100%; margin-bottom: 5px; }
+      h2 { font-size: 18px; }
+    }
+    @media (max-width: 480px) {
+      body { margin: 10px; font-size: 14px; }
+      .flight-logo { height: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="loadEarlierBtn">Load Earlier Flights</button>
+    <button id="notifyBtn">Enable Notifications</button>
+    <button id="themeToggle">Dark Mode</button>
+    <label>
+      Airline Filter:
+      <select id="airlineFilter">
+        <option value="IX">AIX Only</option>
+        <option value="IXAI">AIX + AI</option>
+        <option value="IXOAL" selected>AIX + OAL</option>
+      </select>
+    </label>
+    <label>
+      Sort by:
+      <select id="sortOption">
+        <option value="scheduled" selected>STA / STD</option>
+        <option value="estimated">ETA / ETD</option>
+        <option value="delayed">Delayed First</option>
+      </select>
+    </label>
+  </div>
+  <div class="tabs">
+    <button id="flightsTab">🛬 COK FLIGHTS 🛫</button>
+    <button id="turnTab">Turnaround Flights</button>
+  </div>
+  <div id="flights-section">
+    <h2>Arrivals – COK</h2>
+    <table id="arrivals-table">
+      <thead>
+        <tr><th>Flight</th><th>Reg</th><th>From</th><th>ETA</th><th>STA</th><th>Aircraft</th><th>Status</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <h2>Departures – COK</h2>
+    <table id="departures-table">
+      <thead>
+        <tr><th>Flight</th><th>Reg</th><th>To</th><th>ETD</th><th>STD</th><th>Aircraft</th><th>Status</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div id="turnarounds-section" style="display:none;">
+    <h2>Turnaround Flights – COK</h2>
+    <table id="turnarounds-table">
+      <thead>
+        <tr><th>Flight</th><th>Reg</th><th>From</th><th>To</th><th>ETA/ETD</th><th>STA/STD</th><th>Aircraft</th><th>Status</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <script>
+    /* ================= CONFIG ================= */
+    const AIRPORT = "cok";
+    const BRANDFETCH_CLIENT_ID = "1idBLQ1djCDndBUmUVs"; // From Code 1
+    const baseUrl = `https://api.flightradar24.com/common/v1/airport.json?code=${AIRPORT}`;
+    let baseTimestamp = Math.floor(Date.now() / 1000);
+    let loadedTimestamps = new Set();
+    const fetchHeaders = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" };
+    let historicalFlights = { arrivals: new Set(), departures: new Set() }; // From Code 2
+
+    /* ================= HELPERS ================= */
+    const getEndpoint = (type, ts) =>
+      `${baseUrl}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${ts}&limit=100`;
+
+    const toTime = t => t ? new Date(t * 1000).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }) : "-";
+
+    const getLogo = fn => {
+      // Merged from both codes
+      if (fn.startsWith("IX")) return "https://cdn.brandfetch.io/airindiaexpress.com/logo.png?c=${BRANDFETCH_CLIENT_ID}";
+      if (fn.startsWith("AI")) return "https://cdn.brandfetch.io/airindia.com/logo.png?c=${BRANDFETCH_CLIENT_ID}";
+      if (fn.startsWith("AK") || fn.startsWith("FD")) return "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/AirAsia_New_Logo_%282020%29.svg/768px-AirAsia_New_Logo_%282020%29.svg.png";
+      if (fn.startsWith("J9")) return "https://cdn.brandfetch.io/jazeeraairways.com/logo.png?c=${BRANDFETCH_CLIENT_ID}";
+      if (fn.startsWith("UL")) return "https://cdn.brandfetch.io/srilankan.com/logo.png?c=${BRANDFETCH_CLIENT_ID}";
+      if (fn.startsWith("FZ")) return "https://cdn.brandfetch.io/flydubai.com/logo.svg?c=${BRANDFETCH_CLIENT_ID}";
+      return "";
+    };
+
+    const delayMinutes = (sch, est) => sch && est ? Math.round((est - sch) / 60) : 0;
+
+    const rowClass = (status, delay, sch, est, act) => {
+      const now = Math.floor(Date.now() / 1000);
+      const isDelayed = sch && now > sch && (!act || act > now) && (est > now || !est);
+      const isCompleted = act && act <= now;
+      if (status?.toLowerCase()?.includes("cancel")) return "cancelled";
+      if (delay > 30) return "heavyDelay";
+      if (delay > 5) return "delay";
+      if (isDelayed) return "delay delayed-row";
+      if (isCompleted) return "onTime completed-row";
+      return "onTime";
+    };
+
+    const withinTimeWindow = (type, sch, est, act) => {
+      const now = Math.floor(Date.now() / 1000);
+      const oneHr = 3600;
+      const twentyHr = now + 20 * oneHr;
+      const t = sch || est || 0;
+      const inWindow = t >= now - oneHr && t <= twentyHr;
+      const delayed = sch && now > sch && (!act || act > now) && (est > now || !est);
+      let completed = false;
+      if (type === "arrivals") {
+        completed = act && act >= now - 1200;
+      } else {
+        completed = act && act >= now - 300;
+      }
+      return inWindow || delayed || completed;
+    };
+
+    const cleanupFlights = (type, tbody) => {
+      const now = Math.floor(Date.now() / 1000);
+      Array.from(tbody.rows).forEach(row => {
+        const act = parseInt(row.dataset.act) || 0;
+        if (type === "arrivals" && act < now - 1200) row.remove();
+        if (type === "departures" && act < now) row.remove();
+      });
+    };
+
+    const sortTable = (tableId, sortOption = document.getElementById("sortOption").value) => {
+      const table = document.getElementById(tableId);
+      const tbody = table.tBodies[0];
+      const rows = Array.from(tbody.rows);
+      rows.sort((a, b) => {
+        const aSch = parseInt(a.dataset.sch) || 0;
+        const bSch = parseInt(b.dataset.sch) || 0;
+        const aEst = parseInt(a.dataset.est) || aSch;
+        const bEst = parseInt(b.dataset.est) || bSch;
+        const aAct = parseInt(a.dataset.act) || 0;
+        const bAct = parseInt(b.dataset.act) || 0;
+        const now = Math.floor(Date.now() / 1000);
+        const aDelayed = aSch < now && (!aAct || aAct > now) && (aEst > now || !aEst);
+        const bDelayed = bSch < now && (!bAct || bAct > now) && (bEst > now || !bEst);
+        const aCompleted = aAct && aAct <= now;
+        const bCompleted = bAct && bAct <= now;
+        if (sortOption === "delayed") {
+          if (aDelayed && !bDelayed) return -1;
+          if (!aDelayed && bDelayed) return 1;
+          if (!aCompleted && bCompleted) return -1;
+          if (aCompleted && !bCompleted) return 1;
+          return aEst - bEst;
+        } else if (sortOption === "estimated") {
+          return aEst - bEst;
+        } else {
+          return aSch - bSch;
+        }
+      });
+      rows.forEach(row => tbody.appendChild(row));
+    };
+
+    const airlineAllowed = fn => {
+      const filterValue = document.getElementById("airlineFilter").value;
+      if (filterValue === "IX") return fn.startsWith("IX");
+      if (filterValue === "IXAI") return fn.startsWith("IX") || fn.startsWith("AI");
+      return ["IX", "AK", "FD", "J9", "UL", "FZ"].some(a => fn.startsWith(a));
+    };
+
+    const notifyDelay = (fn, message) => {
+      if (Notification.permission === 'granted') new Notification(`Flight ${fn}: ${message}`);
+    };
+
+    /* ================= LOAD ================= */
+    async function loadFlights(type, ts, append = true) {
+      if (loadedTimestamps.has(type + ts)) return;
+      loadedTimestamps.add(type + ts);
+      const res = await fetch(getEndpoint(type, ts), { headers: fetchHeaders });
+      const data = await res.json();
+      const flights = data?.result?.response?.airport?.pluginData?.schedule?.[type]?.data || [];
+      const tbody = document.querySelector(`#${type}-table tbody`);
+      if (!append) tbody.innerHTML = "";
+      flights.forEach(f => {
+        const fl = f.flight;
+        const fn = fl?.identification?.number?.default || "";
+        if (!airlineAllowed(fn)) return;
+        const isDep = type === "departures";
+        const sch = isDep ? fl.time.scheduled?.departure : fl.time.scheduled?.arrival;
+        const est = isDep ? fl.time.estimated?.departure : fl.time.estimated?.arrival;
+        const act = isDep ? fl.time.actual?.departure : fl.time.actual?.arrival;
+        if (!withinTimeWindow(type, sch, est, act)) return;
+        const flightId = fl.identification?.id || fn;
+        if (historicalFlights[type].has(flightId)) return;
+        historicalFlights[type].add(flightId);
+        const existing = tbody.querySelector(`tr[data-flight-id="${flightId}"]`);
+        const dly = delayMinutes(sch, est);
+        const statusText = fl.status?.text || "-";
+        const className = rowClass(statusText, dly, sch, est, act);
+        if (existing) {
+          const oldClass = existing.className;
+          const oldEtaText = existing.cells[3].innerHTML;
+          let oldDly = 0;
+          if (oldEtaText.includes('(+')) oldDly = parseInt(oldEtaText.split('(+')[1].split(')')[0]) || 0;
+          existing.cells[3].innerHTML = `${toTime(est) || toTime(sch)} ${dly > 0 ? `(+${dly})` : ""}`;
+          existing.cells[6].innerHTML = statusText;
+          existing.className = className;
+          existing.dataset.est = est || 0;
+          existing.dataset.act = act || 0;
+          if (dly > oldDly && dly > 5) notifyDelay(fn, `Delay increased by ${dly - oldDly} minutes to ${dly} minutes total`);
+          else if (className.includes('delay') && !oldClass.includes('delay')) notifyDelay(fn, `Now delayed by ${dly} minutes`);
+          else if (className.includes('heavyDelay') && !oldClass.includes('heavyDelay')) notifyDelay(fn, `Now heavily delayed by ${dly} minutes`);
+          return;
+        }
+        const tr = document.createElement("tr");
+        tr.dataset.flightId = flightId;
+        tr.dataset.sch = sch || 0;
+        tr.dataset.est = est || 0;
+        tr.dataset.act = act || 0;
+        tr.className = className;
+        tr.innerHTML = `
+          <td><img class="flight-logo" src="${getLogo(fn)}" alt="${fn} logo">${fn}</td>
+          <td>${fl.aircraft?.registration || "-"}</td>
+          <td>${isDep ? (fl.airport.destination?.code?.iata || "-") : (fl.airport.origin?.code?.iata || "-")}</td>
+          <td>${toTime(est) || toTime(sch)} ${dly > 0 ? `(+${dly})` : ""}</td>
+          <td>${toTime(sch)}</td>
+          <td>${fl.aircraft?.model?.text || "-"}</td>
+          <td>${statusText}</td>`;
+        tbody.appendChild(tr);
+      });
+      cleanupFlights(type, tbody);
+      sortTable(`${type}-table`);
+    }
+
+    /* ================= BUILD TURNAROUNDS ================= */
+    function buildTurnarounds() {
+      // From Code 1, unchanged
+      const arrivalsRows = Array.from(document.querySelector('#arrivals-table tbody').rows);
+      const departuresRows = Array.from(document.querySelector('#departures-table tbody').rows);
+      const regToArr = new Map();
+      const regToDep = new Map();
+      arrivalsRows.forEach(row => {
+        const reg = row.cells[1].textContent.trim();
+        if (reg === '-' || !reg) return;
+        const arr = {
+          fn: row.cells[0].textContent.trim(),
+          reg,
+          from: row.cells[2].textContent.trim(),
+          eta: parseInt(row.dataset.est) || parseInt(row.dataset.sch) || 0,
+          sch: parseInt(row.dataset.sch) || 0,
+          act: parseInt(row.dataset.act) || 0,
+          aircraft: row.cells[5].textContent.trim(),
+          status: row.cells[6].textContent.trim()
+        };
+        if (!regToArr.has(reg)) regToArr.set(reg, []);
+        regToArr.get(reg).push(arr);
+      });
+      departuresRows.forEach(row => {
+        const reg = row.cells[1].textContent.trim();
+        if (reg === '-' || !reg) return;
+        const dep = {
+          fn: row.cells[0].textContent.trim(),
+          reg,
+          to: row.cells[2].textContent.trim(),
+          etd: parseInt(row.dataset.est) || parseInt(row.dataset.sch) || 0,
+          sch: parseInt(row.dataset.sch) || 0,
+          act: parseInt(row.dataset.act) || 0,
+          aircraft: row.cells[5].textContent.trim(),
+          status: row.cells[6].textContent.trim()
+        };
+        if (!regToDep.has(reg)) regToDep.set(reg, []);
+        regToDep.get(reg).push(dep);
+      });
+      const tbody = document.querySelector('#turnarounds-table tbody');
+      tbody.innerHTML = '';
+      for (const reg of regToArr.keys()) {
+        if (!regToDep.has(reg)) continue;
+        const arrs = regToArr.get(reg).sort((a, b) => a.eta - b.eta);
+        const deps = regToDep.get(reg).sort((a, b) => a.etd - b.etd);
+        for (const arr of arrs) {
+          for (const dep of deps) {
+            if (dep.etd > arr.eta && dep.etd - arr.eta <= 2.5 * 3600) {
+              const arrDly = delayMinutes(arr.sch, arr.eta);
+              const depDly = delayMinutes(dep.sch, dep.etd);
+              const maxDly = Math.max(arrDly, depDly);
+              const statusText = `${arr.status} / ${dep.status}`;
+              const className = rowClass(statusText, maxDly, arr.sch, arr.eta, arr.act);
+              const arrEtaStr = `${toTime(arr.eta)} ${arrDly > 0 ? `(+${arrDly})` : ''}`;
+              const depEtdStr = `${toTime(dep.etd)} ${depDly > 0 ? `(+${depDly})` : ''}`;
+              const logoSrc = getLogo(arr.fn);
+              const tr = document.createElement('tr');
+              tr.dataset.sch = arr.sch || 0;
+              tr.className = className;
+              tr.innerHTML = `
+                <td><img class="flight-logo" src="${logoSrc}" alt="${arr.fn} logo">${arr.fn} / ${dep.fn}</td>
+                <td>${reg}</td>
+                <td>${arr.from}</td>
+                <td>${dep.to}</td>
+                <td>${arrEtaStr} / ${depEtdStr}</td>
+                <td>${toTime(arr.sch)} / ${toTime(dep.sch)}</td>
+                <td>${arr.aircraft}</td>
+                <td>${statusText}</td>
+              `;
+              tbody.appendChild(tr);
+            }
+          }
+        }
+      }
+      sortTable('turnarounds-table');
+    }
+
+    /* ================= AUTO FUTURE LOADER ================= */
+    async function loadInitialWindow(append = false) {
+      baseTimestamp = Math.floor(Date.now() / 1000);
+      loadedTimestamps.clear();
+      historicalFlights.arrivals.clear();
+      historicalFlights.departures.clear();
+      for (let i = -1; i <= 4; i++) {
+        const ts = baseTimestamp + i * 6 * 3600;
+        await Promise.all([
+          loadFlights("arrivals", ts, append),
+          loadFlights("departures", ts, append)
+        ]);
+      }
+      buildTurnarounds();
+    }
+
+    /* ================= CONTROLS ================= */
+    document.getElementById("loadEarlierBtn").onclick = async () => {
+      baseTimestamp -= 6 * 3600;
+      await loadFlights("arrivals", baseTimestamp, true);
+      await loadFlights("departures", baseTimestamp, true);
+      buildTurnarounds();
+    };
+
+    document.getElementById("notifyBtn").onclick = async () => {
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') alert('Notifications enabled');
+        else alert('Notifications denied');
+      } else if (Notification.permission === 'granted') alert('Notifications already enabled');
+      else alert('Notifications denied. Please change in browser settings.');
+    };
+
+    document.getElementById("themeToggle").onclick = () => {
+      const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem("theme", theme);
+    };
+
+    const sections = {
+      flights: document.getElementById('flights-section'),
+      turn: document.getElementById('turnarounds-section')
+    };
+    function showSection(sec) {
+      Object.values(sections).forEach(s => s.style.display = 'none');
+      sections[sec].style.display = 'block';
+    }
+    document.getElementById('flightsTab').onclick = () => showSection('flights');
+    document.getElementById('turnTab').onclick = () => showSection('turn');
+
+    document.getElementById("airlineFilter").addEventListener("change", () => loadInitialWindow());
+    document.getElementById("sortOption").addEventListener("change", () => {
+      sortTable('arrivals-table');
+      sortTable('departures-table');
+      sortTable('turnarounds-table');
+    });
+
+    /* ================= START ================= */
+    // Initialize theme from localStorage
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.documentElement.dataset.theme = savedTheme;
+    loadInitialWindow();
+    setInterval(() => loadInitialWindow(true), 30000); // Append on interval to update
+    showSection('flights');
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(reg => console.log("SW registered", reg))
+          .catch(err => console.error("SW registration failed:", err));
+      });
+    }
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const installBtn = document.createElement("button");
+      installBtn.textContent = "Install App";
+      installBtn.style = "position:fixed;bottom:10px;right:10px;z-index:1000;";
+      installBtn.onclick = () => {
+        installBtn.remove();
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(choice => {
+          if (choice.outcome === 'accepted') console.log("App installed");
+          deferredPrompt = null;
+        });
+      };
+      document.body.appendChild(installBtn);
+    });
+  </script>
+</body>
+</html>
