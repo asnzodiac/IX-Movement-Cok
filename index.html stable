@@ -267,7 +267,7 @@
           } else if (filterValue === "IXAI") {
             airlineMatch = fn.startsWith("IX") || fn.startsWith("AI");
           } else {
-            airlineMatch = fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "J9"].includes(airlineCode);
+            airlineMatch = fn.startsWith("IX") || ["AK", "FD", "UL", "FZ", "WY", "J9"].includes(airlineCode);
           }
           
           return airlineMatch && isWithinTimeWindow;
