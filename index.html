@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="AIX COK"/>
+<meta name="theme-color" content="#0a0f1e"/>
+<title>AIX SEC OPS – COK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"/>
+
+<style>
+/* ===== DESIGN TOKENS ===== */
+:root {
+  --bg:       #0a0f1e;
+  --surface:  #111827;
+  --card:     #1a2235;
+  --border:   #1f2d45;
+  --accent:   #3b82f6;
+  --accent2:  #06b6d4;
+  --text:     #e2e8f0;
+  --muted:    #64748b;
+  --green:    #10b981;
+  --yellow:   #f59e0b;
+  --red:      #ef4444;
+  --grey:     #374151;
+  --mono:     'JetBrains Mono', monospace;
+  --sans:     'Sora', sans-serif;
+  --radius:   10px;
+  --shadow:   0 4px 24px rgba(0,0,0,.4);
+}
+[data-theme="light"] {
+  --bg:       #f0f4f8;
+  --surface:  #ffffff;
+  --card:     #ffffff;
+  --border:   #d1dbe8;
+  --text:     #0f172a;
+  --muted:    #64748b;
+  --green:    #059669;
+  --yellow:   #d97706;
+  --red:      #dc2626;
+  --grey:     #e5e7eb;
+  --shadow:   0 2px 12px rgba(0,0,0,.1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+
+html{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.4;
+  scroll-behavior:smooth;
+}
+
+body{
+  min-height:100dvh;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+
+/* ===== TOP BAR ===== */
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:200;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:10px 14px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding-top:calc(10px + env(safe-area-inset-top));
+  box-shadow:var(--shadow);
+}
+
+.topbar-brand{
+  font-family:var(--mono);
+  font-weight:700;
+  font-size:.85rem;
+  color:var(--accent2);
+  letter-spacing:.05em;
+  flex:1;
+  white-space:nowrap;
+}
+
+.topbar-actions{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.btn{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:7px 13px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:.75rem;
+  font-weight:600;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .15s, border-color .15s, transform .1s;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:active{background:#2563eb}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+
+/* status pill */
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:5px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  font-size:.7rem;
+  font-family:var(--mono);
+  background:var(--card);
+  color:var(--muted);
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.warn{background:var(--yellow)}
+.dot.bad{background:var(--red);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ===== TABS ===== */
+.tabs{
+  display:flex;
+  gap:6px;
+  padding:10px 14px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none}
+
+.tab{
+  flex-shrink:0;
+  padding:8px 16px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--muted);
+  font-size:.75rem;
+  font-weight:600;
+  font-family:var(--sans);
+  cursor:pointer;
+  transition:all .15s;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.tab.active{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#fff;
+}
+
+/* ===== ERROR BANNER ===== */
+#errorBanner{
+  display:none;
+  padding:8px 14px;
+  background:#7f1d1d;
+  color:#fca5a5;
+  font-size:.72rem;
+  font-family:var(--mono);
+  border-bottom:1px solid #991b1b;
+}
+
+/* ===== SECTION ===== */
+.section{display:none;padding:10px 14px 80px}
+.section.active{display:block}
+
+/* ===== SECTION HEADER ===== */
+.sec-title{
+  font-size:.7rem;
+  font-weight:700;
+  font-family:var(--mono);
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--accent2);
+  margin:14px 0 8px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.sec-title::after{
+  content:'';
+  flex:1;
+  height:1px;
+  background:var(--border);
+}
+
+/* ===== TABLE WRAPPER ===== */
+.table-wrap{
+  width:100%;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
+  background:var(--card);
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:.72rem;
+  table-layout:fixed;
+}
+
+thead th{
+  background:var(--surface);
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:.65rem;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  padding:9px 6px;
+  text-align:center;
+  border-bottom:1px solid var(--border);
+  position:sticky;
+  top:0;
+  z-index:10;
+  white-space:nowrap;
+}
+
+tbody tr{
+  border-bottom:1px solid var(--border);
+  transition:background .1s;
+}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(59,130,246,.06)}
+
+td{
+  padding:8px 5px;
+  text-align:center;
+  vertical-align:middle;
+  word-break:break-word;
+  overflow:hidden;
+}
+
+/* Row status colors */
+.onTime  td{background:rgba(16,185,129,.08)}
+.delay   td{background:rgba(245,158,11,.1)}
+.heavyDelay td{background:rgba(239,68,68,.1)}
+.cancelled td{background:rgba(100,116,139,.1); color:var(--muted); text-decoration:line-through}
+
+/* First cell no left border */
+td:first-child,th:first-child{text-align:left;padding-left:10px}
+
+/* Logo */
+.logo{height:14px;width:auto;vertical-align:middle;margin-right:4px;max-width:28px;object-fit:contain}
+
+/* flight number */
+.fn{font-family:var(--mono);font-weight:600;font-size:.71rem;color:var(--accent2)}
+.reg{font-family:var(--mono);font-size:.66rem;color:var(--muted)}
+
+/* status badge */
+.badge{
+  display:inline-block;
+  padding:2px 7px;
+  border-radius:99px;
+  font-size:.62rem;
+  font-weight:600;
+  font-family:var(--mono);
+  white-space:nowrap;
+}
+.badge.green{background:rgba(16,185,129,.18);color:var(--green)}
+.badge.yellow{background:rgba(245,158,11,.18);color:var(--yellow)}
+.badge.red{background:rgba(239,68,68,.18);color:var(--red)}
+.badge.grey{background:rgba(100,116,139,.18);color:var(--muted)}
+
+/* delay chip */
+.dly{
+  display:inline-block;
+  font-size:.6rem;
+  color:var(--yellow);
+  font-family:var(--mono);
+  margin-left:2px;
+}
+
+/* Empty state */
+.empty{
+  text-align:center;
+  padding:40px 20px;
+  color:var(--muted);
+  font-size:.8rem;
+}
+.empty span{font-size:2rem;display:block;margin-bottom:8px}
+
+/* ===== LAST UPDATED ===== */
+#lastUpdated{
+  font-size:.65rem;
+  font-family:var(--mono);
+  color:var(--muted);
+  text-align:right;
+  padding:6px 14px 0;
+}
+
+/* ===== TURNAROUND ===== */
+.turn-pair{text-align:left;padding-left:10px}
+.turn-arr{font-family:var(--mono);font-size:.68rem;color:var(--green)}
+.turn-dep{font-family:var(--mono);font-size:.68rem;color:var(--accent);margin-top:2px}
+
+/* ===== NOTIFICATION TOAST ===== */
+.toast{
+  position:fixed;
+  bottom:calc(20px + env(safe-area-inset-bottom));
+  left:50%;
+  transform:translateX(-50%) translateY(100px);
+  background:var(--accent);
+  color:#fff;
+  padding:10px 18px;
+  border-radius:12px;
+  font-size:.78rem;
+  font-weight:600;
+  box-shadow:0 8px 30px rgba(0,0,0,.4);
+  z-index:999;
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+  white-space:nowrap;
+  max-width:90vw;
+  text-align:center;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ===== LOADING SKELETON ===== */
+.skeleton{
+  background:linear-gradient(90deg,var(--card) 25%,var(--border) 50%,var(--card) 75%);
+  background-size:200% 100%;
+  animation:shimmer 1.4s infinite;
+  border-radius:4px;
+  display:inline-block;
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ===== MOBILE ADJUSTMENTS ===== */
+@media(max-width:480px){
+  html{font-size:13px}
+  table{font-size:.67rem}
+  td,thead th{padding:7px 3px}
+  .logo{height:12px;max-width:22px}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-brand">✈ AIX SEC OPS · COK</div>
+  <div class="topbar-actions">
+    <div class="pill">
+      <span class="dot" id="sDot"></span>
+      <span id="sTxt">Idle</span>
+    </div>
+    <button class="btn" id="proxyBtn" title="Toggle proxy for iOS/Safari">Proxy: Auto</button>
+    <button class="btn" id="themeBtn">🌗</button>
+    <button class="btn primary" id="notifyBtn">🔔</button>
+  </div>
+  <div id="errorBanner"></div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" data-tab="flights">🛬 Arrivals &amp; Departures</button>
+  <button class="tab" data-tab="turnaround">🔄 Turnaround</button>
+</div>
+
+<!-- FLIGHTS SECTION -->
+<div class="section active" id="flights">
+  <div id="lastUpdated"></div>
+
+  <div class="sec-title">Arrivals – COK</div>
+  <div class="table-wrap">
+    <table id="tArr">
+      <thead>
+        <tr>
+          <th style="width:22%">Flight</th>
+          <th style="width:9%">Reg</th>
+          <th style="width:10%">From</th>
+          <th style="width:16%">ETA</th>
+          <th style="width:11%">STA</th>
+          <th style="width:14%">Type</th>
+          <th style="width:18%">Status</th>
+        </tr>
+      </thead>
+      <tbody id="bArr"><tr><td colspan="7" class="empty"><span>✈</span>Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="sec-title">Departures – COK</div>
+  <div class="table-wrap">
+    <table id="tDep">
+      <thead>
+        <tr>
+          <th style="width:22%">Flight</th>
+          <th style="width:9%">Reg</th>
+          <th style="width:10%">To</th>
+          <th style="width:16%">ETD</th>
+          <th style="width:11%">STD</th>
+          <th style="width:14%">Type</th>
+          <th style="width:18%">Status</th>
+        </tr>
+      </thead>
+      <tbody id="bDep"><tr><td colspan="7" class="empty"><span>✈</span>Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div style="text-align:center;margin-top:14px">
+    <button class="btn" id="earlierBtn">⬆ Load Earlier Flights</button>
+  </div>
+</div>
+
+<!-- TURNAROUND SECTION -->
+<div class="section" id="turnaround">
+  <div class="sec-title">Turnaround Matches – COK</div>
+  <div class="table-wrap">
+    <table id="tTurn">
+      <thead>
+        <tr>
+          <th style="width:20%">Pair</th>
+          <th style="width:9%">Reg</th>
+          <th style="width:9%">From</th>
+          <th style="width:9%">To</th>
+          <th style="width:18%">ETA / ETD</th>
+          <th style="width:12%">STA / STD</th>
+          <th style="width:12%">Type</th>
+          <th style="width:11%">Status</th>
+        </tr>
+      </thead>
+      <tbody id="bTurn"><tr><td colspan="8" class="empty"><span>🔄</span>No turnarounds yet</td></tr></tbody>
+    </table>
+  </div>
+  <p style="font-size:.65rem;color:var(--muted);padding:10px 0;text-align:center">
+    Showing: Air India Express (IX) · AirAsia (AK/FD) · SriLankan (UL) · Jazeera (J9) · flydubai (FZ) · Oman Air (WY)
+  </p>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG
+============================================================ */
+const AIRPORT   = 'cok';
+const ALLOWED   = ['IX','AK','FD','UL','J9','FZ','WY'];
+const FR24_BASE = `https://api.flightradar24.com/common/v1/airport.json?code=${AIRPORT}`;
+const BRANDFETCH_ID = '1idBLQ1djCDndBUmUVs';
+
+const PROXIES = [
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+];
+
+/* ============================================================
+   STATE
+============================================================ */
+let proxyMode   = localStorage.getItem('cok_proxy') || 'auto';
+let theme       = localStorage.getItem('cok_theme') || 'dark';
+let baseTs      = Math.floor(Date.now()/1000);
+let loading     = false;
+const lastFetch = new Map(); // key -> timestamp ms
+const notified  = new Set();
+
+/* ============================================================
+   UTILS
+============================================================ */
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+
+function toIST(ts){
+  if(!ts) return '–';
+  try{
+    return new Date(ts*1000).toLocaleTimeString('en-IN',{
+      timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:false
+    });
+  }catch{return '–'}
+}
+
+function delayMin(sch,est){
+  return (sch&&est) ? Math.round((est-sch)/60) : 0;
+}
+
+function rowClass(statusTxt,delay){
+  const s=(statusTxt||'').toLowerCase();
+  if(s.includes('cancel')) return 'cancelled';
+  if(delay>30) return 'heavyDelay';
+  if(delay>5)  return 'delay';
+  return 'onTime';
+}
+
+function badgeClass(cls){
+  if(cls==='onTime')    return 'green';
+  if(cls==='delay')     return 'yellow';
+  if(cls==='heavyDelay')return 'red';
+  return 'grey';
+}
+
+function inWindow(type,sch,est,act){
+  const now=Math.floor(Date.now()/1000);
+  const t=sch||est||0;
+  const inRange = t >= now-3600 && t <= now+72000;
+  const lagging = sch && now>sch && (!act||act>now);
+  const recent  = type==='arrivals' ? (act && act>=now-10800) : (act && act>=now-600);
+  return inRange||lagging||recent;
+}
+
+function cleanOld(type,tbody){
+  const now=Math.floor(Date.now()/1000);
+  Array.from(tbody.rows).forEach(r=>{
+    const act=parseInt(r.dataset.act)||0;
+    const cutoff=type==='arrivals'? now-10800 : now-600;
+    if(act && act<cutoff) r.remove();
+  });
+}
+
+function sortByScheduled(tbody){
+  const rows=Array.from(tbody.rows);
+  rows.sort((a,b)=>(parseInt(a.dataset.sch)||0)-(parseInt(b.dataset.sch)||0));
+  rows.forEach(r=>tbody.appendChild(r));
+}
+
+/* ============================================================
+   LOGOS
+============================================================ */
+function getLogo(fn){
+  if(!fn) return '';
+  if(fn.startsWith('AK')||fn.startsWith('FD'))
+    return 'https://cdn.flightradar24.com/assets/airlines/logotypes/25.png';
+  const MAP={
+    'IX':'airindiaexpress.com','AI':'airindia.com','6E':'goindigo.in',
+    'UK':'airvistara.com','SG':'spicejet.com','QP':'akasaair.com',
+    'EK':'emirates.com','EY':'etihad.com','QR':'qatarairways.com',
+    'SV':'saudia.com','KU':'kuwaitairways.com','WY':'omanair.com',
+    'GF':'gulfair.com','J9':'jazeeraairways.com','G9':'airarabia.com',
+    'UL':'srilankan.com','SQ':'singaporeair.com','TR':'scoot.co',
+    'MH':'malaysiaairlines.com','TG':'thaiairways.com',
+    'VN':'vietnamairlines.com','CX':'cathaypacific.com',
+    'LH':'lufthansa.com','AF':'airfrance.com','KL':'klm.com',
+    'BA':'britishairways.com','TK':'turkishairlines.com',
+    'ET':'ethiopianairlines.com','PK':'piac.com.pk',
+    'OD':'batikair.com','XY':'flynas.com','NP':'flyadeal.com',
+  };
+  const code=fn.slice(0,2);
+  const domain=MAP[code];
+  if(!domain) return '';
+  const fmt=fn.startsWith('FZ')?'svg':'png';
+  return `https://cdn.brandfetch.io/${domain}/logo.${fmt}?w=400&h=120&c=${BRANDFETCH_ID}`;
+}
+
+/* ============================================================
+   FETCH WITH PROXY FALLBACK
+============================================================ */
+async function fetchJson(url){
+  const useProxy = proxyMode==='on' || (proxyMode==='auto' && isIOS);
+  const chain = useProxy
+    ? [...PROXIES.map(p=>({name:p(url).slice(8,30),url:p(url)})),{name:'direct',url}]
+    : [{name:'direct',url},...PROXIES.map(p=>({name:'proxy',url:p(url)}))];
+
+  for(const attempt of chain){
+    try{
+      setStatus('warn','Loading…');
+      const ctrl=new AbortController();
+      const tid=setTimeout(()=>ctrl.abort(),12000);
+      const res=await fetch(attempt.url,{signal:ctrl.signal,cache:'no-store'});
+      clearTimeout(tid);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text=await res.text();
+      const i=text.indexOf('{'), j=text.lastIndexOf('}');
+      const json=JSON.parse(i>=0&&j>i ? text.slice(i,j+1) : text);
+      setStatus('ok',`Live · ${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`);
+      clearError();
+      return json;
+    }catch(e){
+      // try next
+    }
+  }
+  setStatus('bad','No data');
+  showError('Could not load flights. Check connection or toggle Proxy.');
+  throw new Error('All fetch attempts failed');
+}
+
+/* ============================================================
+   STATUS / ERROR
+============================================================ */
+function setStatus(kind,txt){
+  document.getElementById('sDot').className='dot'+(kind?' '+kind:'');
+  document.getElementById('sTxt').textContent=txt;
+}
+function showError(msg){
+  const b=document.getElementById('errorBanner');
+  b.textContent=msg; b.style.display='block';
+}
+function clearError(){
+  document.getElementById('errorBanner').style.display='none';
+}
+
+/* ============================================================
+   NOTIFICATIONS
+============================================================ */
+function canNotify(){return 'Notification' in window}
+function notify(fn,msg){
+  const key=fn+msg;
+  if(notified.has(key)) return;
+  notified.add(key);
+  if(canNotify()&&Notification.permission==='granted'){
+    try{new Notification(`✈ ${fn}`,{body:msg,icon:'icon-192.png'})}catch{}
+  }
+}
+
+/* ============================================================
+   TOAST
+============================================================ */
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+/* ============================================================
+   LOAD FLIGHTS
+============================================================ */
+function shouldFetch(key,minMs=25000){
+  const now=Date.now();
+  if(now-(lastFetch.get(key)||0)>=minMs){ lastFetch.set(key,now); return true; }
+  return false;
+}
+
+async function loadFlights(type,ts,force=false){
+  const key=`${type}:${ts}`;
+  if(!force&&!shouldFetch(key)) return;
+
+  const url=`${FR24_BASE}&plugin-setting[schedule][mode]=${type}&plugin-setting[schedule][timestamp]=${ts}&limit=100`;
+  let json;
+  try{ json=await fetchJson(url); }catch{ return; }
+
+  const flights=json?.result?.response?.airport?.pluginData?.schedule?.[type]?.data||[];
+  const tbody=document.getElementById(type==='arrivals'?'bArr':'bDep');
+
+  // Remove skeleton if present
+  const sk=tbody.querySelector('[data-skeleton]');
+  if(sk) sk.remove();
+
+  let added=0;
+
+  flights.forEach(f=>{
+    const fl=f.flight;
+    const fn=fl?.identification?.number?.default||'';
+    if(!fn) return;
+    const code=fn.slice(0,2);
+    if(!ALLOWED.includes(code)) return;
+
+    const isDep=type==='departures';
+    const sch =isDep?fl.time.scheduled?.departure :fl.time.scheduled?.arrival;
+    const est =isDep?fl.time.estimated?.departure :fl.time.estimated?.arrival;
+    const act =isDep?fl.time.actual?.departure    :fl.time.actual?.arrival;
+    if(!inWindow(type,sch,est,act)) return;
+
+    const fid=fl.identification?.id||fn;
+    const existing=tbody.querySelector(`tr[data-fid="${CSS.escape(fid)}"]`);
+    const dly=delayMin(sch,est);
+    const statusTxt=fl.status?.text||'–';
+    const cls=rowClass(statusTxt,dly);
+
+    if(existing){
+      const oldDly=parseInt(existing.dataset.delay)||0;
+      existing.cells[3].innerHTML=etaCell(est,sch,dly);
+      existing.cells[6].innerHTML=`<span class="badge ${badgeClass(cls)}">${statusTxt}</span>`;
+      existing.className=cls;
+      existing.dataset.delay=dly;
+      // Notify delay change
+      if(dly>0&&dly>oldDly&&dly>5) notify(fn,`Delayed by ${dly} min`);
+      return;
+    }
+
+    const reg  =fl.aircraft?.registration||'–';
+    const dest =isDep?(fl.airport.destination?.code?.iata||'–'):(fl.airport.origin?.code?.iata||'–');
+    const model=fl.aircraft?.model?.code||fl.aircraft?.model?.text||'–';
+    const logo =getLogo(fn);
+
+    const tr=document.createElement('tr');
+    tr.dataset.fid=fid;
+    tr.dataset.sch=sch||0;
+    tr.dataset.est=est||0;
+    tr.dataset.act=act||0;
+    tr.dataset.delay=dly;
+    tr.className=cls;
+    tr.innerHTML=`
+      <td class="fn">${logo?`<img class="logo" src="${logo}" alt="" loading="lazy" onerror="this.style.display='none'">`:''}${fn}</td>
+      <td class="reg">${reg}</td>
+      <td>${dest}</td>
+      <td>${etaCell(est,sch,dly)}</td>
+      <td>${toIST(sch)}</td>
+      <td style="font-size:.65rem">${model}</td>
+      <td><span class="badge ${badgeClass(cls)}">${statusTxt}</span></td>`;
+    tbody.appendChild(tr);
+    added++;
+  });
+
+  cleanOld(type,tbody);
+  sortByScheduled(tbody);
+
+  if(!tbody.rows.length){
+    tbody.innerHTML='<tr><td colspan="7" class="empty"><span>✈</span>No flights in range</td></tr>';
+  }
+
+  document.getElementById('lastUpdated').textContent=
+    `Updated ${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})} IST`;
+}
+
+function etaCell(est,sch,dly){
+  const t=est||sch;
+  const dlyHtml=dly>0?`<span class="dly">(+${dly})</span>`:'';
+  return `${toIST(t)}${dlyHtml}`;
+}
+
+/* ============================================================
+   TURNAROUND
+============================================================ */
+function buildTurnarounds(){
+  const arrRows=Array.from(document.getElementById('bArr').rows);
+  const depRows=Array.from(document.getElementById('bDep').rows);
+  const rArr=new Map(), rDep=new Map();
+
+  arrRows.forEach(r=>{
+    const reg=r.cells[1]?.textContent?.trim();
+    if(!reg||reg==='–') return;
+    const d={fn:r.cells[0].textContent.trim(),reg,
+      from:r.cells[2].textContent.trim(),
+      eta:parseInt(r.dataset.est)||0,sch:parseInt(r.dataset.sch)||0,
+      dly:parseInt(r.dataset.delay)||0,
+      model:r.cells[5]?.textContent?.trim(),
+      status:r.cells[6]?.textContent?.trim()};
+    if(!rArr.has(reg)) rArr.set(reg,[]);
+    rArr.get(reg).push(d);
+  });
+
+  depRows.forEach(r=>{
+    const reg=r.cells[1]?.textContent?.trim();
+    if(!reg||reg==='–') return;
+    const d={fn:r.cells[0].textContent.trim(),reg,
+      to:r.cells[2].textContent.trim(),
+      etd:parseInt(r.dataset.est)||0,sch:parseInt(r.dataset.sch)||0,
+      dly:parseInt(r.dataset.delay)||0,
+      model:r.cells[5]?.textContent?.trim(),
+      status:r.cells[6]?.textContent?.trim()};
+    if(!rDep.has(reg)) rDep.set(reg,[]);
+    rDep.get(reg).push(d);
+  });
+
+  const tbody=document.getElementById('bTurn');
+  tbody.innerHTML='';
+  let count=0;
+
+  for(const reg of rArr.keys()){
+    if(!rDep.has(reg)) continue;
+    const arrs=rArr.get(reg).sort((a,b)=>a.eta-b.eta);
+    const deps=rDep.get(reg).sort((a,b)=>a.etd-b.etd);
+    for(const arr of arrs){
+      for(const dep of deps){
+        const gap=dep.etd-arr.eta;
+        if(gap>0 && gap<=9000){ // up to 2.5 hrs
+          const maxDly=Math.max(arr.dly,dep.dly);
+          const cls=rowClass('',maxDly);
+          const logo=getLogo(arr.fn);
+          const tr=document.createElement('tr');
+          tr.className=cls;
+          tr.dataset.sch=arr.sch||0;
+          tr.innerHTML=`
+            <td class="turn-pair">
+              <div class="turn-arr">${logo?`<img class="logo" src="${logo}" alt="" loading="lazy" onerror="this.style.display='none'">`:''}${arr.fn}</div>
+              <div class="turn-dep">↳ ${dep.fn}</div>
+            </td>
+            <td class="reg">${reg}</td>
+            <td>${arr.from}</td>
+            <td>${dep.to}</td>
+            <td style="font-family:var(--mono);font-size:.67rem">${toIST(arr.eta)} / ${toIST(dep.etd)}</td>
+            <td style="font-family:var(--mono);font-size:.67rem">${toIST(arr.sch)} / ${toIST(dep.sch)}</td>
+            <td style="font-size:.65rem">${arr.model||'–'}</td>
+            <td><span class="badge ${badgeClass(cls)}">${maxDly>0?'+'+maxDly+'min':'On time'}</span></td>`;
+          tbody.appendChild(tr);
+          count++;
+        }
+      }
+    }
+  }
+
+  sortByScheduled(tbody);
+  if(!count){
+    tbody.innerHTML='<tr><td colspan="8" class="empty"><span>🔄</span>No turnarounds detected yet</td></tr>';
+  }
+}
+
+/* ============================================================
+   MAIN LOAD LOOP
+============================================================ */
+async function loadAll(force=false){
+  if(loading&&!force) return;
+  loading=true;
+  try{
+    baseTs=Math.floor(Date.now()/1000);
+    const windows=[-1,0,1,2,3,4].map(i=>baseTs+i*6*3600);
+    await Promise.allSettled(
+      windows.flatMap(ts=>[
+        loadFlights('arrivals',ts,force),
+        loadFlights('departures',ts,force)
+      ])
+    );
+    buildTurnarounds();
+  }finally{
+    loading=false;
+  }
+}
+
+/* ============================================================
+   CONTROLS
+============================================================ */
+// Earlier button
+document.getElementById('earlierBtn').addEventListener('click',async()=>{
+  baseTs-=6*3600;
+  await Promise.allSettled([
+    loadFlights('arrivals',baseTs,true),
+    loadFlights('departures',baseTs,true)
+  ]);
+  buildTurnarounds();
+  showToast('Earlier flights loaded');
+});
+
+// Proxy toggle
+const proxyLabels=['auto','on','off'];
+function updateProxyBtn(){
+  document.getElementById('proxyBtn').textContent=
+    `Proxy: ${proxyMode.charAt(0).toUpperCase()+proxyMode.slice(1)}`;
+}
+document.getElementById('proxyBtn').addEventListener('click',()=>{
+  const i=proxyLabels.indexOf(proxyMode);
+  proxyMode=proxyLabels[(i+1)%3];
+  localStorage.setItem('cok_proxy',proxyMode);
+  updateProxyBtn();
+  showToast(`Proxy: ${proxyMode}`);
+  lastFetch.clear();
+  loadAll(true);
+});
+updateProxyBtn();
+
+// Theme toggle
+function applyTheme(){
+  document.documentElement.dataset.theme=theme==='light'?'light':'dark';
+  document.getElementById('themeBtn').textContent=theme==='dark'?'☀️':'🌙';
+}
+document.getElementById('themeBtn').addEventListener('click',()=>{
+  theme=theme==='dark'?'light':'dark';
+  localStorage.setItem('cok_theme',theme);
+  applyTheme();
+});
+applyTheme();
+
+// Notify button
+document.getElementById('notifyBtn').addEventListener('click',async()=>{
+  if(!canNotify()){showToast('Notifications not supported on this browser');return;}
+  if(Notification.permission==='granted'){showToast('Notifications already enabled ✓');return;}
+  const perm=await Notification.requestPermission();
+  showToast(perm==='granted'?'Notifications enabled ✓':'Notifications blocked');
+});
+
+// Tabs
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='turnaround') buildTurnarounds();
+  });
+});
+
+/* ============================================================
+   PWA / SERVICE WORKER
+============================================================ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  });
+}
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredPrompt=e;
+  const btn=document.createElement('button');
+  btn.className='btn primary';
+  btn.textContent='📲 Install App';
+  btn.style.cssText='position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));right:14px;z-index:500;box-shadow:0 4px 20px rgba(59,130,246,.5)';
+  btn.onclick=()=>{
+    btn.remove();
+    deferredPrompt.prompt();
+    deferredPrompt=null;
+  };
+  document.body.appendChild(btn);
+});
+
+/* ============================================================
+   INIT
+============================================================ */
+if(proxyMode==='auto'&&isIOS){
+  showError('iOS detected – Proxy Auto enabled for CORS bypass.');
+}
+
+// Initial skeleton rows
+['bArr','bDep'].forEach(id=>{
+  const tbody=document.getElementById(id);
+  tbody.innerHTML='';
+  for(let i=0;i<5;i++){
+    const tr=document.createElement('tr');
+    tr.dataset.skeleton='1';
+    tr.innerHTML=`<td colspan="7" style="padding:10px"><div class="skeleton" style="height:14px;width:${60+Math.random()*30}%"></div></td>`;
+    tbody.appendChild(tr);
+  }
+});
+
+loadAll(true);
+setInterval(()=>loadAll(false),30000);
+window.addEventListener('online',()=>{loadAll(true);showToast('Back online – refreshing…');});
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadAll(false); });
+</script>
+</body>
+</html>
