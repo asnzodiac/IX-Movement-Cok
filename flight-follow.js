@@ -1,8 +1,7 @@
 /* ============================================================
    flight-follow.js
    ------------------------------------------------------------
-   Add-on for AIX SEC OPS index.html — does NOT modify any
-   existing logic in index.html. It only reads the arrivals
+   Add-on for AIX SEC OPS index.html — It reads the arrivals
    table that index.html already builds and layers a "track
    this flight" checkbox + a live progress-bar panel on top.
 
@@ -24,14 +23,6 @@
    5. Selections persist across page refreshes (localStorage),
       keyed by the flight's internal ID, so staff don't lose
       their tracked list on reload.
-
-   HOW TO INSTALL
-   ---------------
-   Add ONE line just before </body> in index.html:
-
-       <script src="flight-follow.js"></script>
-
-   That's it — no other changes needed.
 ============================================================ */
 (function () {
   'use strict';
